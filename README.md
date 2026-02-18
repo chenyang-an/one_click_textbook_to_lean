@@ -4,10 +4,83 @@ Automated pipeline that takes LaTeX textbook chapters and produces a fully forma
 
 ## Prerequisites
 
-- **[elan](https://github.com/leanprover/elan)** -- Lean version manager (installs `lake` automatically)
-- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** -- `claude` CLI
-- **Python 3.8+** with `pip`
-- **jq** -- JSON processor (`apt install jq` / `brew install jq`)
+### 1. Lean 4 toolchain (elan + lake)
+
+Install **elan**, the Lean version manager. It automatically installs `lean` and `lake` (the build tool):
+
+```bash
+# Linux / macOS
+curl https://elan.lean-lang.org/install.sh -sSf | sh
+
+# Follow the prompts, then restart your shell or run:
+source ~/.profile
+```
+
+Verify the installation:
+
+```bash
+elan --version    # should print elan 4.x.x
+lake --version    # should print Lake version 5.x.x
+```
+
+elan will automatically download the correct Lean version when you first run `lake` in this project (pinned in `lean-toolchain`).
+
+For more details: https://github.com/leanprover/elan
+
+### 2. Claude Code CLI
+
+Install **Claude Code**, the CLI tool that powers the AI formalization and proof search:
+
+```bash
+# Requires Node.js >= 18
+npm install -g @anthropic-ai/claude-code
+```
+
+After installing, authenticate with your Anthropic API key:
+
+```bash
+claude  # launches interactive mode; follow the auth prompts on first run
+```
+
+Verify it works:
+
+```bash
+claude --version          # should print a version number
+claude -p "Say hello"     # should get a response
+```
+
+The pipeline uses `claude` in non-interactive mode (`claude -p "..."`) with `--dangerously-skip-permissions` to run autonomously. Make sure your API key has sufficient credits -- each chapter may use significant token volume across multiple iterations.
+
+For more details: https://docs.anthropic.com/en/docs/claude-code
+
+### 3. Python 3.8+ with pip
+
+```bash
+python3 --version   # should print 3.8 or higher
+```
+
+Python dependencies (`jinja2`, `pyyaml`) are installed automatically by the pipeline on first run.
+
+### 4. jq
+
+A command-line JSON processor, used to parse Claude's streaming output:
+
+```bash
+# Ubuntu/Debian
+sudo apt install jq
+
+# macOS
+brew install jq
+
+# Verify
+jq --version
+```
+
+## Security Warning
+
+> **WARNING:** This pipeline runs Claude Code with `--dangerously-skip-permissions`, which grants the AI agent **unrestricted access** to execute shell commands, read/write files, and modify your system **without asking for confirmation**. This is required for the autonomous formalization loop to work without human intervention.
+>
+> **Run this pipeline only in an isolated environment** (e.g. a dedicated VM, container, or cloud instance). Do not run it on a machine with sensitive data or credentials. Review the generated agent prompts in `experiments/auto/ch*/agent/` before running if you want to understand exactly what commands will be executed.
 
 ## Quick Start
 
