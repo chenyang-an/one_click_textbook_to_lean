@@ -129,8 +129,28 @@ The pipeline runs 6 stages:
 | **3. Formalize** | Per chapter: statements then proofs (sequential) | Claude CLI loop |
 | **4. Validate** | Full `lake build`, no-sorry check, coverage check, generate `final_summary.md` | Deterministic |
 
-Stage 3 processes chapters sequentially (ch1 -> ch2 -> ... -> chN). For each chapter it runs an iterative statement formalization loop, then an iterative proof search loop (max iterations configurable in `config.yaml`):
-formalize/prove -> verify -> verdict (DONE/CONTINUE).
+Stage 3 processes chapters sequentially (ch1 -> ch2 -> ... -> chN). For each chapter, it runs two phases back-to-back:
+
+### Phase A: Statement formalization loop
+
+Each iteration runs three Claude invocations:
+
+1. **Formalize** (`CLAUDE_statement_fl.md`): Read the chapter's LaTeX, formalize all theorem/lemma/corollary statements into Lean type signatures with `sorry` as placeholder proofs. Reuse definitions from prior chapters. If a previous iteration's verification report exists, focus on fixing the reported issues.
+2. **Verify** (`CLAUDE_statement_verify.md`): Run `lake build` (must compile), run the coverage check script (100% of LaTeX theorem blocks must appear exactly once in the `.lean` file), and check three-way semantic equivalence (LaTeX vs natural language vs Lean) for every theorem.
+3. **Verdict** (`CLAUDE_verdict_statement.md`): Read the verification report. Output exactly `DONE` (all checks passed) or `CONTINUE` (some checks failed).
+
+If `DONE`, the loop exits and the statement file is snapshotted as `ch*_specs.lean`. If `CONTINUE`, the loop repeats from step 1 (the next iteration sees the verification report and fixes the issues). The loop runs up to `max_statement_iterations` times.
+
+### Phase B: Proof search loop
+
+Each iteration runs three to four Claude invocations:
+
+1. **Prove** (`CLAUDE_proof_search.md`): Replace every `sorry` with a complete proof. Run `lake build` after each theorem. Run the coverage check to ensure no definitions or theorem signatures were modified. If a previous iteration's verification report and proof status log exist, read them to avoid repeating failed strategies.
+2. **Verify** (`CLAUDE_proof_verify.md`): Run `lake build` (must succeed with no warnings), check for any remaining `sorry` or `axiom` declarations, and run the coverage preservation check against the snapshotted specs file.
+3. **Verdict** (`CLAUDE_verdict.md`): Read the verification report. Output exactly `DONE` or `CONTINUE`.
+4. **Check statement drift** (`CLAUDE_check_statement_change.md`, runs every `statement_check_interval` iterations): If the proof agent flagged any theorem statements as unfaithful to the LaTeX, a separate agent reviews the argument, applies legitimate fixes, and versions the specs file.
+
+If `DONE`, the chapter is complete. If `CONTINUE`, the loop repeats. The loop runs up to `max_proof_iterations` times.
 
 ## Ensuring Faithful Formalization
 
@@ -215,6 +235,29 @@ pipeline:
   statement_check_interval: 1    # check statement drift every N iterations
 ```
 
+## Custom Skills for Claude Code
+
+You can provide Claude Code with additional Lean proving skills by adding a `CLAUDE.md` file to the project root. Claude Code automatically reads this file as persistent context for every invocation. This is useful for:
+
+- Domain-specific tactic tips (e.g. "use `omega` for linear arithmetic", "try `aesop` before manual proof")
+- Mathlib conventions and common lemma names
+- Proof patterns that work well for your textbook's subject area
+- Instructions to prefer certain proof styles
+
+Example `CLAUDE.md`:
+
+```markdown
+# Lean Proving Tips
+
+- When proving equalities on natural numbers, try `omega` first.
+- For set membership goals, `simp [Set.mem_def]` often works.
+- Use `exact?` and `apply?` to search Mathlib for relevant lemmas.
+- For induction on syntax/formulas, use `induction ... with` pattern matching.
+- Prefer `constructor` over `And.intro` for splitting conjunctions.
+```
+
+You can also add a `CLAUDE.md` inside a specific chapter's experiment directory (e.g. `experiments/auto/ch3/CLAUDE.md`) to give chapter-specific hints. Claude Code picks up `CLAUDE.md` files from the working directory and all parent directories.
+
 ## Project Structure After Running
 
 ```
@@ -251,23 +294,21 @@ All logs and verification artifacts live under `experiments/auto/ch*/`. Here is 
 # Watch the Lean file being written in real time
 tail -f Formalization/ch1.lean
 
-# Current pipeline status (which iteration, which step, RUNNING/FINISHED/etc.)
-cat experiments/auto/ch1/AUTO_RUN_STATUS.md
-
-# Statement formalization status (same format, for the statement phase)
+# Statement formalization status (which iteration, which step, RUNNING/FINISHED/etc.)
 cat experiments/auto/ch1/verification_fl_statement/AUTO_RUN_STATUS.md
 
+# Proof search status
+cat experiments/auto/ch1/verification/AUTO_RUN_STATUS.md
+
 # Live stream of all Claude tool calls, build outputs, and decisions
-tail -f experiments/auto/ch1/AUTO_RUN_LOG.txt
+tail -f experiments/auto/ch1/verification/AUTO_RUN_LOG.txt          # proof search
+tail -f experiments/auto/ch1/verification_fl_statement/AUTO_RUN_LOG.txt  # statements
 ```
 
 ### Log and artifact reference
 
 ```
 experiments/auto/ch1/
-├── AUTO_RUN_STATUS.md                  # Proof search: current iteration, step, status
-├── AUTO_RUN_STATUS.md.history          # Proof search: timestamped history of all steps
-├── AUTO_RUN_LOG.txt                    # Proof search: full log (Claude calls, build output, verdicts)
 │
 ├── verification_fl_statement/
 │   ├── AUTO_RUN_STATUS.md              # Statement phase: current iteration, step, status
@@ -278,6 +319,9 @@ experiments/auto/ch1/
 │       # per-theorem semantic equivalence (LaTeX vs NL vs Lean)
 │
 ├── verification/
+│   ├── AUTO_RUN_STATUS.md              # Proof search: current iteration, step, status
+│   ├── AUTO_RUN_STATUS.md.history      # Proof search: timestamped history of all steps
+│   ├── AUTO_RUN_LOG.txt                # Proof search: full log (Claude calls, build output, verdicts)
 │   ├── fl_proof_verification_result.md
 │   │   # Proof verification report: build check, sorry/axiom check,
 │   │   # coverage preservation check, overall PASS/FAIL
@@ -304,8 +348,10 @@ experiments/auto/ch1/
 
 | What you want to know | File to check |
 |---|---|
-| Is it still running? What step? | `AUTO_RUN_STATUS.md` |
-| What happened so far? | `AUTO_RUN_LOG.txt` |
+| Is statement phase running? | `verification_fl_statement/AUTO_RUN_STATUS.md` |
+| Is proof search running? | `verification/AUTO_RUN_STATUS.md` |
+| Statement phase log | `verification_fl_statement/AUTO_RUN_LOG.txt` |
+| Proof search log | `verification/AUTO_RUN_LOG.txt` |
 | Did statements pass verification? | `verification_fl_statement/fl_statements_verification_result.md` |
 | Did proofs pass verification? | `verification/fl_proof_verification_result.md` |
 | What proof strategies were tried? | `verification/fl_proof_status.md` |
