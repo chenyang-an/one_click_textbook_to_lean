@@ -51,6 +51,18 @@ claude -p "Say hello"     # should get a response
 
 The pipeline uses `claude` in non-interactive mode (`claude -p "..."`) with `--dangerously-skip-permissions` to run autonomously. Make sure your API key has sufficient credits -- each chapter may use significant token volume across multiple iterations.
 
+**Note on model selection:** The pipeline does **not** specify a model -- it uses whatever your default Claude Code model is. Check your current default with:
+
+```bash
+claude config get model
+```
+
+For best results, use a strong model (e.g. `claude-sonnet-4-20250514` or above). You can change the default with:
+
+```bash
+claude config set model <model-name>
+```
+
 For more details: https://docs.anthropic.com/en/docs/claude-code
 
 ### 3. Python 3.8+ with pip
@@ -76,6 +88,25 @@ brew install jq
 jq --version
 ```
 
+## Input Format
+
+The input is a directory containing one `.txt` file per chapter, named `ch1.txt`, `ch2.txt`, ..., `chN.txt`. Each file contains the LaTeX source of that chapter.
+
+```
+my_textbook_chapters/
+├── ch1.txt    # LaTeX source of Chapter 1
+├── ch2.txt    # LaTeX source of Chapter 2
+├── ch3.txt    # LaTeX source of Chapter 3
+└── ...
+```
+
+**IMPORTANT:** The LaTeX **must** use standard theorem environments:
+- `\begin{theorem}...\end{theorem}`
+- `\begin{lemma}...\end{lemma}`
+- `\begin{corollary}...\end{corollary}`
+
+> **If your LaTeX does not use these environments, the pipeline cannot extract theorem blocks and will produce no output.** Custom environments (e.g. `\begin{thm}`, `\begin{prop}`) are not supported unless you modify `OneClickTextbookToLean/evaluation/keep_only_theorems.py` to recognize them.
+
 ## Security Warning
 
 > **WARNING:** This pipeline runs Claude Code with `--dangerously-skip-permissions`, which grants the AI agent **unrestricted access** to execute shell commands, read/write files, and modify your system **without asking for confirmation**. This is required for the autonomous formalization loop to work without human intervention.
@@ -96,25 +127,6 @@ cd one_click_textbook_to_lean
 lake build
 ```
 
-## Input Format
-
-The input directory should contain one `.txt` file per chapter, named `ch1.txt`, `ch2.txt`, ..., `chN.txt`. Each file contains the LaTeX source of that chapter.
-
-```
-my_textbook_chapters/
-├── ch1.txt    # LaTeX source of Chapter 1
-├── ch2.txt    # LaTeX source of Chapter 2
-├── ch3.txt    # LaTeX source of Chapter 3
-└── ...
-```
-
-**IMPORTANT:** The LaTeX **must** use standard theorem environments:
-- `\begin{theorem}...\end{theorem}`
-- `\begin{lemma}...\end{lemma}`
-- `\begin{corollary}...\end{corollary}`
-
-> **If your LaTeX does not use these environments, the pipeline cannot extract theorem blocks and will produce no output.** Custom environments (e.g. `\begin{thm}`, `\begin{prop}`) are not supported unless you modify `OneClickTextbookToLean/evaluation/keep_only_theorems.py` to recognize them.
-
 ## What the Pipeline Does
 
 The pipeline runs 6 stages:
@@ -127,8 +139,58 @@ The pipeline runs 6 stages:
 | **3. Formalize** | Per chapter: statements then proofs (sequential) | Claude CLI loop |
 | **4. Validate** | Full `lake build`, no-sorry check, coverage check, generate `final_summary.md` | Deterministic |
 
-Stage 3 processes chapters sequentially (ch1 -> ch2 -> ... -> chN). For each chapter it runs an iterative statement formalization loop, then an iterative proof search loop (up to 9 iterations each):
+Stage 3 processes chapters sequentially (ch1 -> ch2 -> ... -> chN). For each chapter it runs an iterative statement formalization loop, then an iterative proof search loop (max iterations configurable in `config.yaml`):
 formalize/prove -> verify -> verdict (DONE/CONTINUE).
+
+## Ensuring Faithful Formalization
+
+A key challenge in automated formalization is ensuring that the Lean theorem statements actually mean what the original LaTeX says. The pipeline enforces this through multiple layers of verification, applied iteratively until all checks pass:
+
+### 1. Full coverage (deterministic)
+
+Every `\begin{theorem}...\end{theorem}`, `\begin{lemma}...\end{lemma}`, and `\begin{corollary}...\end{corollary}` block in the source LaTeX is extracted by regex. A deterministic Python script (`check_coverage_latex_quote.py`) then verifies that each extracted block appears **exactly once** as a verbatim quote inside the generated `.lean` file. This guarantees:
+
+- **No theorem is skipped** -- 100% of source theorems must be present
+- **No theorem is duplicated** -- each appears exactly once
+- **No phantom theorems** -- you can't formalize something that wasn't in the textbook
+
+### 2. Three-way semantic equivalence (AI-verified)
+
+Each theorem in the `.lean` file carries three representations in its comment block:
+
+```
+/-Exact quote of the latex code of the theorem statement
+\begin{theorem}...the original LaTeX...\end{theorem}
+
+Natural language statement
+...plain English translation of the LaTeX...
+
+Lean formalization of the natural language statement-/
+theorem Ch1_theorem_1 ... := by sorry
+```
+
+A separate verification agent checks semantic equivalence across all three:
+
+- **LaTeX -> Natural Language**: Does the English accurately capture the LaTeX? Are quantifiers, conditions, and logical structure preserved?
+- **Natural Language -> Lean**: Does the Lean type signature accurately capture the English? Are types, quantifiers (`∀`, `∃`), connectives (`∧`, `∨`, `→`, `↔`), and compound structure correct?
+- **Overall rating**: Each theorem is rated **Equivalent** / **Minor discrepancy** / **Major discrepancy**. Any major discrepancy causes the loop to **CONTINUE** and re-formalize.
+
+### 3. Statement preservation during proof search (deterministic)
+
+Before proof search begins, the statement file is snapshotted as `ch*_specs.lean`. A second deterministic Python script (`check_coverage_lean_statement.py`) runs after every proof iteration to verify that **no definition or theorem signature was modified** during proving. If the proof agent accidentally changes a statement, the check fails and the change is reverted.
+
+### 4. Statement drift detection and repair (AI-verified)
+
+If the proof search agent discovers that a theorem statement is unfaithful to the LaTeX (e.g. it's unprovable as stated because of a mistranslation), it logs the issue to `fl_statements_unfaithful_arguments.md`. A separate review agent (`CLAUDE_check_statement_change.md`) then:
+
+- Independently evaluates whether the argument is mathematically justified
+- If legitimate, modifies the statement and versions the specs file
+- If not legitimate, rejects the change
+- All decisions are logged in `fl_statements_change_history.md`
+
+### 5. Iterative refinement
+
+The statement formalization phase runs up to `max_statement_iterations` iterations (configurable in `config.yaml`) of: **formalize -> verify -> verdict**. It only exits when all checks pass simultaneously (coverage, build, semantic equivalence). This means even if the first attempt has issues, the pipeline self-corrects across iterations -- the verification report from each failed iteration is fed back to the next formalization attempt.
 
 ## Resuming After Abort
 
