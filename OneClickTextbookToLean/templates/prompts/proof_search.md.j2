@@ -1,0 +1,104 @@
+# Lean 4 Proof Search Task: Chapter {{ ch_num }}
+
+## Overview
+
+You are a Lean 4 expert tasked with proving all theorem statements in a formalization of Chapter {{ ch_num }} of a textbook.
+
+## Input File
+
+The file containing definitions and theorem statements is located at:
+```
+{{ lean_chapter_file }}
+```
+
+This file contains theorems/corollaries/lemmas that need proofs. Each theorem currently has `sorry` as its proof.
+
+## Absolute Requirements
+
+### DO NOT:
+1. **Modify existing definitions** - All definitions in the file must remain exactly as they are
+2. **Modify theorem statements** - The theorem signatures must remain unchanged, even if you think the statement is unfaithful to the latex quote.
+3. **Use `sorry`** - No `sorry` may appear anywhere in the final proofs
+4. **Declare axioms** - You cannot declare something as an `axiom` to avoid proving it
+5. **Stop with incomplete work** - You must continue working until all theorems are proven
+6. **Modify files outside Chapter {{ ch_num }}** - Other agents may be working on other chapters concurrently. Only modify `ch{{ ch_num }}.lean` and related Chapter {{ ch_num }} files
+
+### You MAY:
+1. Add helper lemmas to assist with proofs
+2. Add auxiliary definitions if needed for proofs
+3. Use Mathlib4 tactics and lemmas (the file already imports `Mathlib.Tactic`). The entire Mathlib4 is open to you.
+
+## Workflow
+
+For **each theorem**, follow this process:
+
+### Step 1: Write the Proof
+Replace the `sorry` with a complete proof.
+
+### Step 2: Build and Verify
+Run:
+```bash
+cd {{ project_root }} && lake build
+```
+
+**IMPORTANT: Only check errors/warnings for Chapter {{ ch_num }} files (ch{{ ch_num }}.lean).**
+
+The build must succeed without:
+- Any errors **in ch{{ ch_num }}.lean**
+- Any warnings about `sorry` **in ch{{ ch_num }}.lean**
+- Any warnings about `axiom` **in ch{{ ch_num }}.lean**
+
+If there are errors or warnings in other chapters but **no errors or warnings for Chapter {{ ch_num }}**, the build **PASSES** for your chapter.
+
+### Step 3: Check Coverage
+Run:
+```bash
+python3 {{ evaluation_dir }}/check_coverage_lean_statement.py \
+  {{ intermediate_dir }}/ch{{ ch_num }}_specs.lean \
+  {{ lean_chapter_file }}
+```
+
+This script verifies that you have not modified any original theorem statements or definitions. If anything is modified, **immediately revert** the changes and redo the proof.
+
+### Step 4: Move to Next Theorem
+Proceed to the next theorem after the current one:
+- Has a complete proof (no sorry)
+- Passes `lake build` without warnings
+- Passes the coverage check
+
+### If you've tried many times on a particular theorem but still fail on that, you can then try to solve other theorem, and come back to this one later.
+
+## Logging Requirements
+
+Log
+1. all verification efforts
+2. Extremely important: the methods you've tried for the theorems but failed so far!!!!!
+3. the coverage score resulted from check_coverage_lean_statement.py
+to:
+```
+{{ verification_dir }}/fl_proof_status.md
+```
+
+Don't overwrite anything. Only add to this file.
+
+Include for each theorem:
+- Theorem name
+- Proof status (in progress / completed / failed attempts)
+- `lake build` output (success/failure, any errors)
+- Coverage check output
+- Any helper lemmas added
+- Notes on proof strategy (Especially log the failed approach you've tried so far if you in the end fail to finish the proof for this theorem)
+
+## Success Criteria
+
+You are **not done** until ALL of the following are satisfied:
+
+1. All theorems have complete proofs (no `sorry` anywhere)
+2. `lake build` succeeds with no warnings
+3. The coverage check script passes (no definitions/statements modified)
+
+## When writing proof, make sure the stuff you write don't insert in between theorem and the natural language description and the exact quote.
+
+## During proving, if you found that theorem statement is not faithful and semantically equivalent to the latex code quote, overwrite and save your analysis and explanation for this theorem into {{ verification_dir }}/fl_statements_unfaithful_arguments.md (together with the latex quote and the old theorem statement), then work on other theorem. Important: don't change the statement in {{ lean_chapter_file }}, even if you think the statement is unfaithful to the latex code quote! Someone else will work on it.
+
+## Log the failed approach in {{ verification_dir }}/fl_proof_status.md! This might help for the next iteration! (never overwrite this file!)

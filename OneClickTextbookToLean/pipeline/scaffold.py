@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""
+Stage 0: Scaffold the Lean project directories and generate
+Formalization.lean (root import file) based on discovered chapters.
+Also copies raw chapter data into the project tree.
+"""
+
+import argparse
+import os
+import shutil
+import sys
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--input", required=True, help="Directory containing ch*.txt files")
+    p.add_argument("--output", required=True, help="Lean project root")
+    p.add_argument("--chapters", required=True, help="Comma-separated chapter numbers")
+    p.add_argument("--evaluation", required=True, help="Path to evaluation/ dir")
+    args = p.parse_args()
+
+    chapters = [int(c) for c in args.chapters.split(",")]
+    project = args.output
+
+    # --- Create directory tree ---
+    dirs = [
+        os.path.join(project, "Formalization"),
+        os.path.join(project, "natural_language", "raw_data", "theorems_only"),
+    ]
+    for ch in chapters:
+        dirs.append(os.path.join(project, "Formalization", "intermediate_files", f"ch{ch}"))
+        dirs.append(os.path.join(project, "experiments", "auto", f"ch{ch}", "agent"))
+        dirs.append(os.path.join(project, "experiments", "auto", f"ch{ch}", "verification"))
+        dirs.append(os.path.join(project, "experiments", "auto", f"ch{ch}", "verification_fl_statement"))
+
+    for d in dirs:
+        os.makedirs(d, exist_ok=True)
+
+    # --- Copy raw chapter data ---
+    raw_dir = os.path.join(project, "natural_language", "raw_data")
+    for ch in chapters:
+        src = os.path.join(args.input, f"ch{ch}.txt")
+        dst = os.path.join(raw_dir, f"ch{ch}.txt")
+        if os.path.exists(src):
+            shutil.copy2(src, dst)
+        else:
+            print(f"WARNING: {src} not found, skipping", file=sys.stderr)
+
+    # --- Generate Formalization.lean (root import) ---
+    root_lean = os.path.join(project, "Formalization.lean")
+    lines = []
+    for ch in chapters:
+        lines.append(f"import Formalization.ch{ch}")
+    with open(root_lean, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+    print(f"Scaffolded project with chapters {chapters}")
+    print(f"  Root import: {root_lean}")
+    print(f"  Raw data copied to: {raw_dir}")
+
+
+if __name__ == "__main__":
+    main()

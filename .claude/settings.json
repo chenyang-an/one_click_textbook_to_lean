@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(lake *)",
+      "Bash(cd *)",
+      "Bash(python*)",
+      "Bash(grep *)",
+      "Bash(cat *)",
+      "Bash(cp *)",
+      "Bash(mkdir *)",
+      "Bash(ls *)"
+    ]
+  }
+}

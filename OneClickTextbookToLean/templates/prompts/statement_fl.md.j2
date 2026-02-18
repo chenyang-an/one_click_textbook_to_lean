@@ -1,0 +1,116 @@
+# Task: Formalize Chapter {{ ch_num }} Theorem Statements in Lean
+
+## Objective
+
+Translate the theorems from `{{ raw_data_dir }}/ch{{ ch_num }}.txt` into Lean formalizations at `{{ lean_chapter_file }}`.
+
+## Input Files
+
+- **Main content**: `{{ raw_data_dir }}/ch{{ ch_num }}.txt` - Contains definitions and context for Chapter {{ ch_num }}
+- **Theorems only**: `{{ theorems_only_dir }}/ch{{ ch_num }}.txt` - Contains the exact LaTeX code for all theorems that must be formalized
+
+## Reuse definitions
+{% if prior_chapters %}
+You should reuse definitions from {% for dep in prior_chapters %}{{ lean_src_dir }}/ch{{ dep }}.lean{% if not loop.last %}, {% endif %}{% endfor %} whenever possible!!!
+{% else %}
+This is the first chapter. No prior chapter definitions to reuse.
+{% endif %}
+
+## Output Format
+
+For each theorem/lemma/corollary in the theorems file, the output in ch{{ ch_num }}.lean should follow this format (here is an example):
+
+```lean
+/-Exact quote of the latex code of the theorem statement (include this line)
+\begin{lemma}\label{lem:stronglyHenkin}
+Suppose $\exists x\, A(x)$ is an $L$-sentence and $\Gamma$~is a
+consistent set of $L$-sentences.
+Let $c$ be a new constant symbol, so $c\notin L$. Then
+\[
+\hbox{ $\Gamma \cup \{ A(c) \limplies \forall x\, A(x)\}$ is consistent.}
+\]
+\end{lemma}
+
+Natural language statement (include this line)
+Suppose ∃x A(x) is a sentence and Γ is a consistent set of sentences. Let c be a new
+constant symbol not in L. Then Γ ∪ {A(c) → ∀x A(x)} is consistent.
+
+Lean formalization of the natural language statement (include this line)-/
+theorem Ch{{ ch_num }}_theorem_N ... : ... := by
+  sorry
+```
+
+## Naming Convention
+
+1. Theorems, corollaries, and lemmas should use a **shared sequential index**:
+   - `Ch{{ ch_num }}_theorem_1`, `Ch{{ ch_num }}_corollary_2`, `Ch{{ ch_num }}_theorem_3`, etc.
+   - If there is a theorem, then a corollary, then another theorem, the naming should be: `Ch{{ ch_num }}_theorem_1`, `Ch{{ ch_num }}_corollary_2`, `Ch{{ ch_num }}_theorem_3`
+
+2. **One Lean statement per theorem quote**: If a theorem has parts (a), (b), (c), you should formalize it as ONE single Lean theorem that captures all parts, not multiple separate theorems.
+
+3. Helper lemmas that you create for supporting definitions do NOT use the indexed naming format.
+
+## Required Definitions
+
+Check `{{ raw_data_dir }}/ch{{ ch_num }}.txt` for all related definitions needed to formalize the theorems. You must formalize these definitions first before the theorems.
+
+## Verification Criteria
+
+Continue refining the formalization until ALL of the following criteria pass:
+
+### Criterion 1: Compilation
+```bash
+cd {{ project_root }} && lake build
+```
+The build must complete with no errors. `sorry` is allowed since you are only formalizing statements.
+
+### Criterion 2: Coverage Check
+```bash
+python {{ evaluation_dir }}/check_coverage_latex_quote.py {{ theorems_only_dir }}/ch{{ ch_num }}.txt {{ lean_chapter_file }}
+```
+Must show:
+- **100% coverage** - every theorem block from the theorems file must appear in the Lean file
+- **No duplicates** - each theorem block must appear exactly once
+
+### Criterion 3: Semantic Equivalence
+
+For **each theorem/corollary/lemma** in the file, verify semantic equivalence among three representations:
+
+1. **Exact LaTeX quote** (in the comment block starting with "Exact quote of the latex code")
+2. **Natural language statement** (in the comment block starting with "Natural language statement")
+3. **Lean formalization** (the actual `theorem` or `corollary` statement)
+
+#### For each theorem, assess:
+
+**A. LaTeX -> Natural Language Faithfulness:**
+- Does the natural language statement accurately capture the meaning of the LaTeX?
+- Are all conditions, quantifiers, and logical structure preserved?
+- Are there any omissions or additions?
+
+**B. Natural Language -> Lean Faithfulness:**
+- Does the Lean formalization accurately capture the natural language statement?
+- Are the types correct?
+- Are quantifiers (forall, exists) correctly placed?
+- Are logical connectives (and, or, implies, iff) correctly used?
+- Is the structure of compound statements (conjunctions of multiple parts) preserved?
+
+**C. Overall Semantic Equivalence:**
+- Rate the equivalence: **Equivalent** / **Minor discrepancy** / **Major discrepancy**
+- If not equivalent, explain the discrepancy
+
+## Mathlib Imports
+
+Start with these standard imports:
+```lean
+import Mathlib.Tactic
+import Mathlib.Data.Set.Basic
+import Mathlib.Data.Finset.Basic
+```
+
+Add additional imports as needed for specific mathematical concepts. This repo has Mathlib4 as dependency. Feel free to use it if you have to.
+
+## Important, you always have to pass all the Verification Criteria before you stop working!
+## Put all the verification efforts you've done and verification output in {{ verification_fl_statement_dir }}/fl_statements_status.md!
+## Even verification fail, still log the output and efforts.
+## If you undergo formalizing-verification-formalizing-verification loop several time, that's good! Faithfully record all your verification efforts!
+## Verification must contain three parts: run check coverage python check, check semantic equivalence, and lake build (sorry is ok, don't need to fill proofs).

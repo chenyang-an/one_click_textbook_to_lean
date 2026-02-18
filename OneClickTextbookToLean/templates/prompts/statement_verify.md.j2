@@ -1,0 +1,76 @@
+# Task: Verify Semantic Equivalence of Chapter {{ ch_num }} Formalized Statements
+
+## Objective
+
+Verify that each formalized Lean statement in `{{ lean_chapter_file }}` is semantically equivalent to the original LaTeX theorem quote.
+
+## Step 0: Coverage Check
+
+First, run the coverage check to ensure all LaTeX theorem blocks appear in the Lean file:
+
+```bash
+python {{ evaluation_dir }}/check_coverage_latex_quote.py {{ theorems_only_dir }}/ch{{ ch_num }}.txt {{ lean_chapter_file }}
+```
+
+If the coverage check fails (missing or duplicate blocks), report the failure and stop. The formalization step must fix coverage issues before verification can proceed.
+
+## Step 1: Build Check
+
+Run:
+```bash
+cd {{ project_root }} && lake build
+```
+
+The build must complete with no errors. `sorry` is allowed since we are only checking statements.
+If the build fails with errors in ch{{ ch_num }}.lean, report the failure and stop.
+
+## Step 2: Semantic Equivalence Check
+
+Read `{{ lean_chapter_file }}`.
+
+For **each** theorem/corollary/lemma (identified by the naming pattern `Ch{{ ch_num }}_theorem_*`, `Ch{{ ch_num }}_corollary_*`, `Ch{{ ch_num }}_lemma_*`), verify semantic equivalence among the three representations:
+
+1. **Exact LaTeX quote** (in the comment block starting with `--Exact quote of the latex code of the theorem statement`)
+2. **Natural language statement** (in the comment block starting with `--Natural language statement`)
+3. **Lean formalization** (the actual `theorem` or `corollary` or `lemma` statement)
+
+### For each theorem, assess:
+
+**A. LaTeX -> Natural Language Faithfulness:**
+- Does the natural language statement accurately capture the meaning of the LaTeX?
+- Are all conditions, quantifiers, and logical structure preserved?
+- Are there any omissions or additions?
+
+**B. Natural Language -> Lean Faithfulness:**
+- Does the Lean formalization accurately capture the natural language statement?
+- Are the types correct?
+- Are quantifiers (forall, exists) correctly placed?
+- Are logical connectives (and, or, implies, iff) correctly used?
+- Is the structure of compound statements (conjunctions of multiple parts) preserved?
+
+**C. Overall Semantic Equivalence:**
+- Rate the equivalence: **Equivalent** / **Minor discrepancy** / **Major discrepancy**
+- If not equivalent, explain the discrepancy clearly
+
+## Step 3: Write Results
+
+Write the full verification results to:
+```
+{{ verification_fl_statement_dir }}/fl_statements_verification_result.md
+```
+
+The results file must contain:
+
+1. **Coverage check result** (pass/fail with output)
+2. **Build check result** (pass/fail)
+3. **Per-theorem semantic equivalence assessment** with ratings
+4. **Summary**: total theorems checked, number equivalent, number with minor discrepancies, number with major discrepancies
+5. **List of theorems with even minor discrepancies** that need to be re-formalized
+
+## Important
+
+- Be rigorous and mathematically precise in your assessment
+- A "minor discrepancy" is a stylistic difference that doesn't change mathematical meaning
+- A "major discrepancy" is a difference that changes the mathematical content of the theorem
+- Do NOT modify ch{{ ch_num }}.lean yourself - only report issues
+- Even minor discrepancy fail the verification!! Strict semantic equivalence is required!

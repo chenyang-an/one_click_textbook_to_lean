@@ -1,0 +1,142 @@
+# Lean 4 Proof Verification Task: Chapter {{ ch_num }}
+
+## Overview
+
+You are a Lean 4 expert and mathematical logic reviewer tasked with verifying the formalization of Chapter {{ ch_num }} theorems. Your job is to verify correctness at multiple levels: build success, proof completeness, statement preservation.
+
+## File to Verify
+
+```
+{{ lean_chapter_file }}
+```
+
+## Verification Tasks
+
+You must perform ALL of the following verification checks:
+
+## Suggest in the md file to use existing related Mathlib4 file to help with the proof.
+
+---
+
+### 1. Build Verification
+
+Run:
+```bash
+cd {{ project_root }} && lake build
+```
+
+**Check for:**
+- Build succeeds without errors
+- No compilation warnings
+
+**Record:** Full build output, success/failure status
+
+---
+
+### 2. Sorry and Axiom Check
+
+Scan the file `{{ lean_chapter_file }}` for:
+
+#### 2a. `sorry` Usage
+Search for any occurrence of `sorry` in the file:
+```bash
+grep -n "sorry" {{ lean_chapter_file }}
+```
+
+**Criteria:** There must be NO `sorry` anywhere in the file.
+
+#### 2b. `axiom` Usage
+Search for any `axiom` declarations used to avoid proving:
+```bash
+grep -n "^axiom\|^  axiom" {{ lean_chapter_file }}
+```
+
+**Criteria:** There must be NO `axiom` declarations that circumvent proofs.
+
+**Record:** Line numbers and content of any violations found.
+
+---
+
+### 3. Coverage Check (Statement Preservation)
+
+Run the coverage verification script:
+```bash
+python3 {{ evaluation_dir }}/check_coverage_lean_statement.py \
+  {{ intermediate_dir }}/ch{{ ch_num }}_specs.lean \
+  {{ lean_chapter_file }}
+```
+
+**Purpose:** This verifies that all original definitions and theorem statements remain unmodified.
+
+**Criteria:** The script must report that all statements are preserved (no modifications to definitions or theorem signatures).
+
+**Record:** Full script output.
+
+---
+
+## Output Requirements
+
+Write ALL verification results to (overwrite this file):
+```
+{{ verification_dir }}/fl_proof_verification_result.md
+```
+
+### Output Format
+
+```markdown
+# Chapter {{ ch_num }} Proof Verification Results
+
+**Verification Date:** [date]
+**File Verified:** {{ lean_chapter_file }}
+
+---
+
+## 1. Build Verification
+**Status:** [PASS/FAIL]
+**Output:**
+[paste lake build output here]
+
+---
+
+## 2. Sorry and Axiom Check
+### 2a. Sorry Check
+**Status:** [PASS/FAIL]
+**Occurrences found:** [number]
+
+### 2b. Axiom Check
+**Status:** [PASS/FAIL]
+**Occurrences found:** [number]
+
+---
+
+## 3. Coverage Check (Statement Preservation)
+**Status:** [PASS/FAIL]
+**Script Output:**
+[paste coverage check output here]
+
+---
+
+## Summary
+**Build:** [PASS/FAIL]
+**Sorry-free:** [PASS/FAIL]
+**Axiom-free:** [PASS/FAIL]
+**Coverage:** [PASS/FAIL]
+
+### Overall Verdict: [PASS/FAIL]
+```
+
+---
+
+## Success Criteria
+
+The verification **PASSES** only if ALL of the following are true:
+
+1. `lake build` succeeds without errors
+2. No `sorry` found anywhere in the file
+3. No `axiom` declarations used to avoid proofs
+4. Coverage check script passes (all statements preserved)
+
+### CRITICAL: Chapter Scope Rules
+
+- **DO NOT modify any files outside of Chapter {{ ch_num }}.**
+- **When interpreting `lake build` results:** Only check for errors and warnings related to **Chapter {{ ch_num }} files** (e.g., `ch{{ ch_num }}.lean`). If there are errors or warnings in other chapters but **no errors or warnings for Chapter {{ ch_num }}**, the build verification **PASSES** for your chapter.

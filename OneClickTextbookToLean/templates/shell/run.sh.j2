@@ -1,0 +1,14 @@
+#!/bin/bash
+# run.sh - Full pipeline for Chapter {{ ch_num }}: statements then proofs
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+echo "=== Chapter {{ ch_num }}: Statement Formalization ==="
+bash "$SCRIPT_DIR/run_statement.sh"
+
+echo "=== Chapter {{ ch_num }}: Snapshotting specs ==="
+cp "{{ lean_chapter_file }}" "{{ intermediate_dir }}/ch{{ ch_num }}_specs.lean"
+
+echo "=== Chapter {{ ch_num }}: Proof Search ==="
+bash "$SCRIPT_DIR/run_proof.sh"

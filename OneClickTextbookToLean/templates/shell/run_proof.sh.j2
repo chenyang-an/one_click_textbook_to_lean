@@ -1,0 +1,205 @@
+#!/bin/bash
+# run_proof.sh - Autonomous proof search and verification loop for Chapter {{ ch_num }}
+
+# === Configuration ===
+BASE_DIR="{{ experiment_ch_dir }}"
+AGENT_DIR="$BASE_DIR/agent"
+VERIFY_DIR="$BASE_DIR/verification"
+
+PROOF_SEARCH_TASK="$AGENT_DIR/CLAUDE_proof_search.md"
+VERIFY_TASK="$AGENT_DIR/CLAUDE_proof_verify.md"
+VERDICT_TASK="$AGENT_DIR/CLAUDE_verdict.md"
+CHECK_STATEMENT_TASK="$AGENT_DIR/CLAUDE_check_statement_change.md"
+
+PROOF_STATUS="$VERIFY_DIR/fl_proof_status.md"
+VERIFY_RESULT="$VERIFY_DIR/fl_proof_verification_result.md"
+
+STATUS_FILE="$BASE_DIR/AUTO_RUN_STATUS.md"
+LOG_FILE="$BASE_DIR/AUTO_RUN_LOG.txt"
+WORKDIR="{{ project_root }}"
+
+MAX_ITERATIONS={{ max_proof_iterations }}
+CHECK_INTERVAL={{ statement_check_interval }}
+
+cd "$WORKDIR"
+
+# === Helper function to update status ===
+update_status() {
+    local iteration=$1
+    local step=$2
+    local state=$3
+    local details=$4
+
+    cat > "$STATUS_FILE" << EOF
+# Chapter {{ ch_num }} Proof Search - Auto Status
+
+| Field | Value |
+|-------|-------|
+| **Status** | $state |
+| **Current Iteration** | $iteration / $MAX_ITERATIONS |
+| **Current Step** | $step |
+| **Started At** | $START_TIME |
+| **Last Updated** | $(date '+%Y-%m-%d %H:%M:%S') |
+| **PID** | $$ |
+
+## Current Activity
+$details
+
+## Progress History
+$(cat "$STATUS_FILE.history" 2>/dev/null || echo "No history yet")
+EOF
+}
+
+append_history() {
+    echo "- [$(date '+%H:%M:%S')] $1" >> "$STATUS_FILE.history"
+}
+
+cleanup() {
+    local exit_code=$?
+    pkill -P $$ 2>/dev/null
+
+    if [ $exit_code -eq 0 ]; then
+        update_status "$CURRENT_ITER" "Completed" "FINISHED" "All verifications passed successfully!"
+    elif [ $exit_code -eq 1 ]; then
+        update_status "$CURRENT_ITER" "Stopped" "STOPPED" "Max iterations reached or manual stop."
+    elif [ $exit_code -eq 130 ]; then
+        update_status "$CURRENT_ITER" "Interrupted" "INTERRUPTED" "Process interrupted by user (Ctrl+C)."
+    else
+        update_status "$CURRENT_ITER" "Error" "ERROR" "Process terminated unexpectedly (exit code: $exit_code)"
+    fi
+    append_history "Process ended with exit code $exit_code"
+}
+
+trap 'exit 130' INT TERM
+trap cleanup EXIT
+
+START_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+CURRENT_ITER=0
+echo "" > "$STATUS_FILE.history"
+append_history "Chapter {{ ch_num }} Proof Search started"
+
+log() {
+    echo "$1" | tee -a "$LOG_FILE"
+}
+
+run_claude() {
+    local prompt="$1"
+    local tmpfile=$(mktemp)
+
+    claude {{ claude_flags }} -p "$prompt" 2>&1 | tee "$tmpfile" | while IFS= read -r line; do
+        local type=$(echo "$line" | jq -r '.type // empty' 2>/dev/null)
+        case "$type" in
+            assistant)
+                echo "$line" | jq -r '.message.content[]? | select(.type == "tool_use") | ">>> Tool: \(.name)" + (if .name == "Bash" then " - " + (.input.command // "" | .[0:200]) else "" end)' 2>/dev/null
+                ;;
+            result)
+                local result=$(echo "$line" | jq -r '.result // empty')
+                local duration_ms=$(echo "$line" | jq -r '.duration_ms // 0')
+                local duration_min=$((duration_ms / 60000))
+                local duration_sec=$(( (duration_ms % 60000) / 1000 ))
+                local cost=$(echo "$line" | jq -r '.total_cost_usd // "N/A"')
+                echo "$result"
+                echo "--- Stats: ${duration_min}m${duration_sec}s | \$${cost} ---"
+                ;;
+        esac
+    done | tee -a "$LOG_FILE"
+
+    rm -f "$tmpfile"
+}
+
+run_claude_capture() {
+    local prompt="$1"
+    local tmpfile=$(mktemp)
+
+    claude {{ claude_flags }} -p "$prompt" > "$tmpfile" 2>&1
+
+    cat "$tmpfile" | while IFS= read -r line; do
+        local type=$(echo "$line" | jq -r '.type // empty' 2>/dev/null)
+        case "$type" in
+            result)
+                local result=$(echo "$line" | jq -r '.result // empty')
+                echo "$result"
+                ;;
+        esac
+    done | tee -a "$LOG_FILE" >&2
+
+    local result=$(grep '"type":"result"' "$tmpfile" 2>/dev/null | jq -r '.result // empty')
+    rm -f "$tmpfile"
+    echo "$result"
+}
+
+echo "" >> "$LOG_FILE"
+log "============================================"
+log "Chapter {{ ch_num }} Proof Search Started at $START_TIME"
+log "============================================"
+
+# === Main Loop ===
+for i in $(seq 1 $MAX_ITERATIONS); do
+    CURRENT_ITER=$i
+
+    log ""
+    log "========================================"
+    log "=== ITERATION $i of $MAX_ITERATIONS ==="
+    log "========================================"
+    append_history "Iteration $i started"
+
+    # Step 1: Proof Search
+    update_status "$i" "1/3 Proof Search" "RUNNING" "Running Claude proof search task..."
+    append_history "Iteration $i: Proof search started"
+    log "Iteration $i: Proof Search started"
+
+    run_claude "Load task from $PROOF_SEARCH_TASK. Also read the verification result from $VERIFY_RESULT and proof status from $PROOF_STATUS if they exist. Start proving theorems. If one approach doesn't work after much effort, try a completely different proof strategy. No sorry allowed in proofs! IMPORTANT: Do NOT modify any file outside of this chapter. Ignore any errors or warnings that are not about this chapter."
+
+    log "Iteration $i: Proof Search ends"
+    append_history "Iteration $i: Proof search completed"
+
+    # Step 2: Verification
+    update_status "$i" "2/3 Verification" "RUNNING" "Running Claude verification task..."
+    append_history "Iteration $i: Verification started"
+    log "Iteration $i: Verification started"
+
+    run_claude "Load task from $VERIFY_TASK and execute the verification. Write results to $VERIFY_RESULT. IMPORTANT: Do NOT modify any file outside of this chapter. Ignore any errors or warnings that are not about this chapter."
+
+    log "Iteration $i: Verification ends"
+    append_history "Iteration $i: Verification completed"
+
+    # Step 3: Verdict
+    update_status "$i" "3/3 Checking Verdict" "RUNNING" "Claude is analyzing verification results..."
+    append_history "Iteration $i: Checking verdict"
+    log "Iteration $i: Checking verdict"
+
+    VERDICT_OUTPUT=$(run_claude_capture "Load task from $VERDICT_TASK and execute it. Reply with exactly one word: DONE or CONTINUE.")
+    DECISION=$(echo "$VERDICT_OUTPUT" | tail -1)
+
+    log "Iteration $i: Decision is $DECISION"
+    append_history "Iteration $i: Decision = $DECISION"
+
+    if [[ "$DECISION" == *"DONE"* ]]; then
+        log "========================================"
+        log "=== Chapter {{ ch_num }} Proof Search Complete ==="
+        log "========================================"
+        append_history "SUCCESS - All verifications passed"
+        exit 0
+    fi
+
+    # Step 4: Check Statement Change
+    if (( i % CHECK_INTERVAL == 0 )); then
+        update_status "$i" "4/4 Check Statement Change" "RUNNING" "Running Claude statement change verification..."
+        append_history "Iteration $i: Check statement change started"
+        log "Iteration $i: Check Statement Change started"
+
+        run_claude "Load task from $CHECK_STATEMENT_TASK and execute it."
+
+        log "Iteration $i: Check Statement Change ends"
+        append_history "Iteration $i: Check statement change completed"
+    fi
+
+    log ">>> Continuing to next iteration..."
+    sleep 2
+done
+
+log "========================================"
+log "=== MAX ITERATIONS REACHED ==="
+log "========================================"
+append_history "STOPPED - Max iterations reached"
+exit 1

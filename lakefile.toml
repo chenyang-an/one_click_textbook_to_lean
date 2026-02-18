@@ -1,7 +1,7 @@
 name = "one_click_textbook_to_lean"
 version = "0.1.0"
 keywords = ["math"]
-defaultTargets = ["OneClickTextbookToLean"]
+defaultTargets = ["Formalization"]
 
 [leanOptions]
 pp.unicode.fun = true # pretty-prints `fun a ↦ b`
@@ -14,5 +14,6 @@ name = "mathlib"
 scope = "leanprover-community"
 rev = "v4.29.0-rc1"
 
+# The generated formalization chapters live under Formalization/
 [[lean_lib]]
-name = "OneClickTextbookToLean"
+name = "Formalization"
