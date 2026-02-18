@@ -20,7 +20,6 @@ import shutil
 import subprocess
 import sys
 import yaml
-from concurrent.futures import ProcessPoolExecutor, as_completed
 
 
 def discover_chapters(input_dir: str) -> list:
@@ -178,42 +177,25 @@ def main():
     print()
 
     # -------------------------------------------------------
-    # Stage 3: Statement formalization (sequential)
+    # Stage 3: Formalization (statements → proofs, per chapter)
     # -------------------------------------------------------
     print("=" * 60)
-    print("STAGE 3: Statement formalization (sequential by chapter)")
+    print("STAGE 3: Formalization (sequential by chapter)")
     print("=" * 60)
-    for ch in chapters:
-        print(f"\n--- Chapter {ch}: statement formalization ---")
-        run_chapter_statements(project_root, ch)
-        snapshot_specs(project_root, ch)
-    print()
-
-    # -------------------------------------------------------
-    # Stage 4: Proof search (parallel)
-    # -------------------------------------------------------
-    print("=" * 60)
-    print("STAGE 4: Proof search (parallel across chapters)")
-    print("=" * 60)
-    max_workers = pipeline_cfg.get("max_parallel_chapters", 2)
     failed_chapters = []
-
-    with ProcessPoolExecutor(max_workers=max_workers) as pool:
-        futures = {
-            pool.submit(run_chapter_proofs, project_root, ch): ch
-            for ch in chapters
-        }
-        for fut in as_completed(futures):
-            ch = futures[fut]
-            try:
-                fut.result()
-                print(f"  Chapter {ch}: proof search DONE")
-            except Exception as e:
-                print(f"  Chapter {ch}: proof search FAILED: {e}")
-                failed_chapters.append(ch)
+    for ch in chapters:
+        print(f"\n{'=' * 60}")
+        print(f"Chapter {ch}: statements → proofs")
+        print(f"{'=' * 60}")
+        try:
+            run_chapter_full(project_root, ch)
+            print(f"  Chapter {ch}: DONE")
+        except Exception as e:
+            print(f"  Chapter {ch}: FAILED: {e}")
+            failed_chapters.append(ch)
 
     if failed_chapters:
-        print(f"\nWARNING: Chapters {failed_chapters} failed proof search (max iterations reached)")
+        print(f"\nWARNING: Chapters {failed_chapters} failed (max iterations reached)")
     print()
 
     # -------------------------------------------------------

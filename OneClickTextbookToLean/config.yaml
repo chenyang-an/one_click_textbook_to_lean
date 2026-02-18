@@ -1,7 +1,6 @@
 pipeline:
   max_statement_iterations: 9
   max_proof_iterations: 9
-  max_parallel_chapters: 2
   statement_check_interval: 1
 
 claude:
