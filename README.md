@@ -51,17 +51,7 @@ claude -p "Say hello"     # should get a response
 
 The pipeline uses `claude` in non-interactive mode (`claude -p "..."`) with `--dangerously-skip-permissions` to run autonomously. Make sure your API key has sufficient credits -- each chapter may use significant token volume across multiple iterations.
 
-**Note on model selection:** The pipeline does **not** specify a model -- it uses whatever your default Claude Code model is. Check your current default with:
-
-```bash
-claude config get model
-```
-
-For best results, use a strong model (e.g. `claude-sonnet-4-20250514` or above). You can change the default with:
-
-```bash
-claude config set model <model-name>
-```
+**Note on model selection:** The pipeline does **not** specify a model -- it uses whatever your default Claude Code model is. Make sure you know which model is your default before running the pipeline.
 
 For more details: https://docs.anthropic.com/en/docs/claude-code
 
