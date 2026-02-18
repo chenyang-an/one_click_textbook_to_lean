@@ -111,15 +111,73 @@ one_click_textbook_to_lean/
 
 ## Monitoring Progress
 
-While the pipeline runs, check per-chapter status:
+The formalization is fully observable in real time. You can watch `Formalization/ch*.lean` being written as the pipeline runs -- open it in an editor or `tail -f` to see theorems and proofs appear live.
+
+All logs and verification artifacts live under `experiments/auto/ch*/`. Here is what each file means:
+
+### Real-time status
 
 ```bash
-# Statement formalization status
-cat experiments/auto/ch1/verification_fl_statement/AUTO_RUN_STATUS.md
+# Watch the Lean file being written in real time
+tail -f Formalization/ch1.lean
 
-# Proof search status
+# Current pipeline status (which iteration, which step, RUNNING/FINISHED/etc.)
 cat experiments/auto/ch1/AUTO_RUN_STATUS.md
 
-# Detailed logs
+# Statement formalization status (same format, for the statement phase)
+cat experiments/auto/ch1/verification_fl_statement/AUTO_RUN_STATUS.md
+
+# Live stream of all Claude tool calls, build outputs, and decisions
 tail -f experiments/auto/ch1/AUTO_RUN_LOG.txt
 ```
+
+### Log and artifact reference
+
+```
+experiments/auto/ch1/
+├── AUTO_RUN_STATUS.md                  # Proof search: current iteration, step, status
+├── AUTO_RUN_STATUS.md.history          # Proof search: timestamped history of all steps
+├── AUTO_RUN_LOG.txt                    # Proof search: full log (Claude calls, build output, verdicts)
+│
+├── verification_fl_statement/
+│   ├── AUTO_RUN_STATUS.md              # Statement phase: current iteration, step, status
+│   ├── AUTO_RUN_STATUS.md.history      # Statement phase: timestamped step history
+│   ├── AUTO_RUN_LOG.txt                # Statement phase: full log
+│   └── fl_statements_verification_result.md
+│       # Statement verification report: coverage check, build check,
+│       # per-theorem semantic equivalence (LaTeX vs NL vs Lean)
+│
+├── verification/
+│   ├── fl_proof_verification_result.md
+│   │   # Proof verification report: build check, sorry/axiom check,
+│   │   # coverage preservation check, overall PASS/FAIL
+│   ├── fl_proof_status.md
+│   │   # Proof search log: per-theorem proof status, strategies tried,
+│   │   # failed approaches (persisted across iterations for learning)
+│   ├── fl_statements_unfaithful_arguments.md
+│   │   # Flagged by proof search when a theorem statement appears
+│   │   # unfaithful to the LaTeX -- reviewed by statement change checker
+│   └── fl_statements_change_history.md
+│       # Log of all statement modifications approved by the change checker
+│
+└── agent/
+    ├── CLAUDE_statement_fl.md          # Prompt: formalize statements from LaTeX
+    ├── CLAUDE_statement_verify.md      # Prompt: verify statement correctness
+    ├── CLAUDE_verdict_statement.md     # Prompt: DONE or CONTINUE for statements
+    ├── CLAUDE_proof_search.md          # Prompt: prove all theorems
+    ├── CLAUDE_proof_verify.md          # Prompt: verify proof completeness
+    ├── CLAUDE_verdict.md               # Prompt: DONE or CONTINUE for proofs
+    └── CLAUDE_check_statement_change.md # Prompt: review & apply statement fixes
+```
+
+### Key files to check
+
+| What you want to know | File to check |
+|---|---|
+| Is it still running? What step? | `AUTO_RUN_STATUS.md` |
+| What happened so far? | `AUTO_RUN_LOG.txt` |
+| Did statements pass verification? | `verification_fl_statement/fl_statements_verification_result.md` |
+| Did proofs pass verification? | `verification/fl_proof_verification_result.md` |
+| What proof strategies were tried? | `verification/fl_proof_status.md` |
+| Current state of the Lean file | `Formalization/ch*.lean` |
+| Final summary across all chapters | `final_summary.md` (generated after pipeline completes) |
