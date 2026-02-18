@@ -35,7 +35,12 @@ my_textbook_chapters/
 └── ...
 ```
 
-The LaTeX should contain standard theorem environments (`\begin{theorem}...\end{theorem}`, `\begin{lemma}...\end{lemma}`, `\begin{corollary}...\end{corollary}`).
+**IMPORTANT:** The LaTeX **must** use standard theorem environments:
+- `\begin{theorem}...\end{theorem}`
+- `\begin{lemma}...\end{lemma}`
+- `\begin{corollary}...\end{corollary}`
+
+> **If your LaTeX does not use these environments, the pipeline cannot extract theorem blocks and will produce no output.** Custom environments (e.g. `\begin{thm}`, `\begin{prop}`) are not supported unless you modify `OneClickTextbookToLean/evaluation/keep_only_theorems.py` to recognize them.
 
 ## What the Pipeline Does
 
