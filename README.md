@@ -133,24 +133,24 @@ Stage 3 processes chapters sequentially (ch1 -> ch2 -> ... -> chN). For each cha
 
 ### Phase A: Statement formalization loop
 
-Each iteration runs three Claude invocations:
+Each iteration (round) runs three Claude invocations. All outputs for round N are saved in `verification_fl_statement/round_N/`, so no round overwrites another's artifacts.
 
-1. **Formalize** (`CLAUDE_statement_fl.md`): Read the chapter's LaTeX, formalize all theorem/lemma/corollary statements into Lean type signatures with `sorry` as placeholder proofs. Reuse definitions from prior chapters. If a previous iteration's verification report exists, focus on fixing the reported issues.
-2. **Verify** (`CLAUDE_statement_verify.md`): Run `lake build` (must compile), run the coverage check script (100% of LaTeX theorem blocks must appear exactly once in the `.lean` file), and check three-way semantic equivalence (LaTeX vs natural language vs Lean) for every theorem.
-3. **Verdict** (`CLAUDE_verdict_statement.md`): Read the verification report. Output exactly `DONE` (all checks passed) or `CONTINUE` (some checks failed).
+1. **Formalize** (`CLAUDE_statement_fl.md`): Read the chapter's LaTeX, formalize all theorem/lemma/corollary statements into Lean type signatures with `sorry` as placeholder proofs. Reuse definitions from prior chapters. If the previous round's verification report exists, read it and focus on fixing the reported issues. Save the formalization status log to the current round directory.
+2. **Verify** (`CLAUDE_statement_verify.md`): Run `lake build` (must compile), run the coverage check script (100% of LaTeX theorem blocks must appear exactly once in the `.lean` file), and check three-way semantic equivalence (LaTeX vs natural language vs Lean) for every theorem. Write results to the current round directory.
+3. **Verdict** (`CLAUDE_verdict_statement.md`): Read the current round's verification report. Output exactly `DONE` (all checks passed) or `CONTINUE` (some checks failed).
 
-If `DONE`, the loop exits and the statement file is snapshotted as `ch*_specs.lean`. If `CONTINUE`, the loop repeats from step 1 (the next iteration sees the verification report and fixes the issues). The loop runs up to `max_statement_iterations` times.
+If `DONE`, the loop exits and the statement file is snapshotted as `ch*_specs.lean`. If `CONTINUE`, the loop repeats from step 1 (the next round reads the previous round's verification report and fixes the issues). The loop runs up to `max_statement_iterations` rounds.
 
 ### Phase B: Proof search loop
 
-Each iteration runs three to four Claude invocations:
+Each iteration (round) runs three to four Claude invocations. All outputs for round N are saved in `verification/round_N/`, preserving the full history across rounds.
 
-1. **Prove** (`CLAUDE_proof_search.md`): Replace every `sorry` with a complete proof. Run `lake build` after each theorem. Run the coverage check to ensure no definitions or theorem signatures were modified. If a previous iteration's verification report and proof status log exist, read them to avoid repeating failed strategies.
-2. **Verify** (`CLAUDE_proof_verify.md`): Run `lake build` (must succeed with no warnings), check for any remaining `sorry` or `axiom` declarations, and run the coverage preservation check against the snapshotted specs file.
-3. **Verdict** (`CLAUDE_verdict.md`): Read the verification report. Output exactly `DONE` or `CONTINUE`.
-4. **Check statement drift** (`CLAUDE_check_statement_change.md`, runs every `statement_check_interval` iterations): If the proof agent flagged any theorem statements as unfaithful to the LaTeX, a separate agent reviews the argument, applies legitimate fixes, and versions the specs file.
+1. **Prove** (`CLAUDE_proof_search.md`): Replace every `sorry` with a complete proof. Run `lake build` after each theorem. Run the coverage check to ensure no definitions or theorem signatures were modified. At the start, the agent reads the previous round's verification report and proof status log to learn which approaches already failed and avoid repeating them. At the end, the agent saves a complete proof status log (including all failed approaches) to the current round directory.
+2. **Verify** (`CLAUDE_proof_verify.md`): Run `lake build` (must succeed with no warnings), check for any remaining `sorry` or `axiom` declarations, and run the coverage preservation check against the snapshotted specs file. Write results to the current round directory.
+3. **Verdict** (`CLAUDE_verdict.md`): Read the current round's verification report. Output exactly `DONE` or `CONTINUE`.
+4. **Check statement drift** (`CLAUDE_check_statement_change.md`, runs every `statement_check_interval` iterations): If the proof agent flagged any theorem statements as unfaithful to the LaTeX (saved to the current round's `fl_statements_unfaithful_arguments.md`), a separate agent reviews the argument, applies legitimate fixes, and versions the specs file. Decisions are logged to the current round's `fl_statements_change_history.md`.
 
-If `DONE`, the chapter is complete. If `CONTINUE`, the loop repeats. The loop runs up to `max_proof_iterations` times.
+If `DONE`, the chapter is complete. If `CONTINUE`, the loop repeats. The loop runs up to `max_proof_iterations` rounds.
 
 ## Ensuring Faithful Formalization
 
@@ -191,16 +191,23 @@ Before proof search begins, the statement file is snapshotted as `ch*_specs.lean
 
 ### 4. Statement drift detection and repair (AI-verified)
 
-If the proof search agent discovers that a theorem statement is unfaithful to the LaTeX (e.g. it's unprovable as stated because of a mistranslation), it logs the issue to `fl_statements_unfaithful_arguments.md`. A separate review agent (`CLAUDE_check_statement_change.md`) then:
+If the proof search agent discovers that a theorem statement is unfaithful to the LaTeX (e.g. it's unprovable as stated because of a mistranslation), it appends the issue to the current round's `fl_statements_unfaithful_arguments.md` (inside `verification/round_N/`). A separate review agent (`CLAUDE_check_statement_change.md`) then:
 
+- Reads the current round's unfaithful arguments file
 - Independently evaluates whether the argument is mathematically justified
 - If legitimate, modifies the statement and versions the specs file
 - If not legitimate, rejects the change
-- All decisions are logged in `fl_statements_change_history.md`
+- All decisions are logged in the current round's `fl_statements_change_history.md`
 
-### 5. Iterative refinement
+### 5. Iterative refinement with round-based history
 
-The statement formalization phase runs up to `max_statement_iterations` iterations (configurable in `config.yaml`) of: **formalize -> verify -> verdict**. It only exits when all checks pass simultaneously (coverage, build, semantic equivalence). This means even if the first attempt has issues, the pipeline self-corrects across iterations -- the verification report from each failed iteration is fed back to the next formalization attempt.
+Both the statement and proof phases use a **round-based** directory structure. Each round saves its outputs (verification results, proof status logs, unfaithful argument analyses) into a separate `round_N/` subdirectory. This means:
+
+- **No overwriting**: Every round's artifacts are preserved, giving full visibility into the pipeline's progression.
+- **Cross-round learning**: Each new round reads the previous round's outputs to avoid repeating failed strategies and focus on unresolved issues.
+- **Full audit trail**: You can inspect any round's verification report or proof status log to understand what happened at each step.
+
+The statement formalization phase runs up to `max_statement_iterations` rounds (configurable in `config.yaml`) of: **formalize -> verify -> verdict**. It only exits when all checks pass simultaneously (coverage, build, semantic equivalence). The proof search phase runs up to `max_proof_iterations` rounds of: **prove -> verify -> verdict (-> check statement drift)**. Each round reads the previous round's proof status log (including all failed approaches) so it can try different strategies.
 
 ## Resuming After Abort
 
@@ -314,25 +321,33 @@ experiments/auto/ch1/
 │   ├── AUTO_RUN_STATUS.md              # Statement phase: current iteration, step, status
 │   ├── AUTO_RUN_STATUS.md.history      # Statement phase: timestamped step history
 │   ├── AUTO_RUN_LOG.txt                # Statement phase: full log
-│   └── fl_statements_verification_result.md
-│       # Statement verification report: coverage check, build check,
-│       # per-theorem semantic equivalence (LaTeX vs NL vs Lean)
+│   ├── round_1/                        # Round 1 artifacts
+│   │   ├── fl_statements_status.md     # Formalization efforts log for round 1
+│   │   └── fl_statements_verification_result.md
+│   │       # Verification report: coverage, build, semantic equivalence
+│   ├── round_2/                        # Round 2 artifacts (reads round_1's results)
+│   │   ├── fl_statements_status.md
+│   │   └── fl_statements_verification_result.md
+│   └── ...                             # One directory per round
 │
 ├── verification/
 │   ├── AUTO_RUN_STATUS.md              # Proof search: current iteration, step, status
 │   ├── AUTO_RUN_STATUS.md.history      # Proof search: timestamped history of all steps
 │   ├── AUTO_RUN_LOG.txt                # Proof search: full log (Claude calls, build output, verdicts)
-│   ├── fl_proof_verification_result.md
-│   │   # Proof verification report: build check, sorry/axiom check,
-│   │   # coverage preservation check, overall PASS/FAIL
-│   ├── fl_proof_status.md
-│   │   # Proof search log: per-theorem proof status, strategies tried,
-│   │   # failed approaches (persisted across iterations for learning)
-│   ├── fl_statements_unfaithful_arguments.md
-│   │   # Flagged by proof search when a theorem statement appears
-│   │   # unfaithful to the LaTeX -- reviewed by statement change checker
-│   └── fl_statements_change_history.md
-│       # Log of all statement modifications approved by the change checker
+│   ├── round_1/                        # Round 1 artifacts
+│   │   ├── fl_proof_status.md          # Per-theorem proof status, strategies tried, failed approaches
+│   │   ├── fl_proof_verification_result.md
+│   │   │   # Verification report: build, sorry/axiom, coverage — PASS/FAIL
+│   │   ├── fl_statements_unfaithful_arguments.md
+│   │   │   # Flagged by proof search when a statement appears unfaithful
+│   │   └── fl_statements_change_history.md
+│   │       # Decisions from check_statement_change for this round
+│   ├── round_2/                        # Round 2 artifacts (reads round_1's results)
+│   │   ├── fl_proof_status.md
+│   │   ├── fl_proof_verification_result.md
+│   │   ├── fl_statements_unfaithful_arguments.md
+│   │   └── fl_statements_change_history.md
+│   └── ...                             # One directory per round
 │
 └── agent/
     ├── CLAUDE_statement_fl.md          # Prompt: formalize statements from LaTeX
@@ -352,8 +367,12 @@ experiments/auto/ch1/
 | Is proof search running? | `verification/AUTO_RUN_STATUS.md` |
 | Statement phase log | `verification_fl_statement/AUTO_RUN_LOG.txt` |
 | Proof search log | `verification/AUTO_RUN_LOG.txt` |
-| Did statements pass verification? | `verification_fl_statement/fl_statements_verification_result.md` |
-| Did proofs pass verification? | `verification/fl_proof_verification_result.md` |
-| What proof strategies were tried? | `verification/fl_proof_status.md` |
+| Did statements pass verification (latest round)? | `verification_fl_statement/round_N/fl_statements_verification_result.md` |
+| Did proofs pass verification (latest round)? | `verification/round_N/fl_proof_verification_result.md` |
+| What proof strategies were tried (latest round)? | `verification/round_N/fl_proof_status.md` |
+| Were any statements flagged as unfaithful? | `verification/round_N/fl_statements_unfaithful_arguments.md` |
+| What statement changes were approved? | `verification/round_N/fl_statements_change_history.md` |
 | Current state of the Lean file | `Formalization/ch*.lean` |
 | Final summary across all chapters | `final_summary.md` (generated after pipeline completes) |
+
+> **Tip:** To find the latest round, check which `round_N/` directory has the highest N: `ls verification/` or `ls verification_fl_statement/`.
