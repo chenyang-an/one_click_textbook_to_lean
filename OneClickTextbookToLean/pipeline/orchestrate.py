@@ -60,14 +60,14 @@ def stage0_fetch_mathlib(project_root):
 
 
 def stage1_extract(input_dir, project_root, chapters, evaluation_dir):
-    """Extract theorem blocks from each chapter."""
-    theorems_dir = os.path.join(project_root, "natural_language", "raw_data", "theorems_only")
+    """Extract theorem and definition blocks from each chapter."""
+    theorems_dir = os.path.join(project_root, "natural_language", "raw_data", "theorems_and_defs")
     os.makedirs(theorems_dir, exist_ok=True)
-    script = os.path.join(evaluation_dir, "keep_only_theorems.py")
+    script = os.path.join(evaluation_dir, "keep_only_theorems_and_defs.py")
     for ch in chapters:
         src = os.path.join(input_dir, f"ch{ch}.txt")
         dst = os.path.join(theorems_dir, f"ch{ch}.txt")
-        print(f"  ch{ch}: extracting theorem blocks...")
+        print(f"  ch{ch}: extracting theorem/definition blocks...")
         run_cmd([sys.executable, script, src, dst])
 
 
@@ -162,7 +162,7 @@ def main():
     # Stage 1: Extract theorem blocks
     # -------------------------------------------------------
     print("=" * 60)
-    print("STAGE 1: Extracting theorem blocks")
+    print("STAGE 1: Extracting theorem and definition blocks")
     print("=" * 60)
     stage1_extract(args.input, project_root, chapters, args.evaluation)
     print()

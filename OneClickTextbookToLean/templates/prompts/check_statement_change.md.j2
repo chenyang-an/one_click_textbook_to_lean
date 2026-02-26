@@ -1,31 +1,28 @@
 # Task: Verify and Apply Lean 4 Statement Changes
 
-You are a Lean 4 expert. Your task is to verify proposed changes to theorem statements and apply them if legitimate.
+You are a Lean 4 expert. Your task is to verify proposed changes to theorem/definition statements and apply them if legitimate.
 
 ## Step 1: Review the Proposed Changes
 
-Read the analysis file:
-```
-{{ verification_dir }}/fl_statements_unfaithful_arguments.md
-```
+Read the unfaithful arguments analysis file. **The exact file path will be provided to you at runtime by the orchestrator** (it will be inside a round-specific directory like `{{ verification_dir }}/round_N/fl_statements_unfaithful_arguments.md`). Read whichever path the orchestrator tells you.
 
 Read carefully! You are the only one I can count on. Make sure your judge is mathematically justified. Think carefully.
 
-If the file is empty, stop and exit.
+If the file is empty or does not exist, stop and exit.
 
 ## Step 2: If change is not legitimate
 
-Skip this theorem and move to the next.
+Skip this statement and move to the next.
 
 ## Step 3: If change is legitimate
 
-If you think the analysis and explanation makes sense, so that the theorem statement is indeed unfaithful and semantically inequivalent to the latex quote, please modify the corresponding theorem statement in {{ lean_chapter_file }} so that the new statement is faithful and semantically equivalent to the latex quote.
+If you think the analysis and explanation makes sense, so that the theorem statement or definition is indeed unfaithful and semantically inequivalent to the latex quote, please modify the corresponding statement in {{ lean_chapter_file }} so that the new statement is faithful and semantically equivalent to the latex quote.
 
 You should deal with each statement one at a time.
 
 ----------------------------------------------------------------
 
-After all theorem statements are dealt with,
+After all statements (theorems and definitions) are dealt with,
 
 1. **Find the next version number**: Check the directory `{{ intermediate_dir }}/` for existing files matching the pattern `ch{{ ch_num }}_specs_*.lean` and determine the next version number.
 
@@ -48,15 +45,14 @@ After all theorem statements are dealt with,
    {{ intermediate_dir }}/ch{{ ch_num }}_specs.lean
    ```
 
-## Always log your decision into {{ verification_dir }}/fl_statements_change_history.md. Don't overwrite the log file, always add to it.
-
-## After you finish everything, wipe out everything in {{ verification_dir }}/fl_statements_unfaithful_arguments.md.
+## Always log your decision into the round-specific `fl_statements_change_history.md` (the path the orchestrator tells you). Don't overwrite; always append.
 
 ## Summary of Files
 
 | Purpose | Path |
 |---------|------|
-| Analysis of unfaithful arguments | `{{ verification_dir }}/fl_statements_unfaithful_arguments.md` |
+| Analysis of unfaithful arguments | Round-specific `fl_statements_unfaithful_arguments.md` (provided by orchestrator) |
+| Decision log | Round-specific `fl_statements_change_history.md` (provided by orchestrator) |
 | Main Lean file (source of truth) | `{{ lean_chapter_file }}` |
 | Specs file to version | `{{ intermediate_dir }}/ch{{ ch_num }}_specs.lean` |
 | Versioned specs directory | `{{ intermediate_dir }}/` |

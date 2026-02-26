@@ -1,18 +1,15 @@
 # Verdict Task: Chapter {{ ch_num }} Statement Formalization
 
-Read the verification result file at:
-```
-{{ verification_fl_statement_dir }}/fl_statements_verification_result.md
-```
+Read the verification result file. **The exact file path will be provided to you at runtime by the orchestrator** (it will be inside a round-specific directory like `{{ verification_fl_statement_dir }}/round_N/fl_statements_verification_result.md`). Read whichever path the orchestrator tells you.
 
 ## Decision Criteria
 
 Reply with ONLY the single word **'DONE'** if ALL of the following criteria are satisfied:
 
 1. **Build Success:** `lake build` passes without errors (sorry is allowed)
-2. **Coverage Check Passed:** All LaTeX theorem blocks from theorems_only/ch{{ ch_num }}.txt appear exactly once in ch{{ ch_num }}.lean (100% coverage, no duplicates)
-3. **Semantic Equivalence:** ALL theorems have **Equivalent** or **Minor discrepancy** ratings - NO **Major discrepancy** found
-4. **No Missing Theorems:** Every theorem/corollary/lemma from the source has a corresponding Lean formalization
+2. **Coverage Check Passed:** All LaTeX theorem and definition blocks from theorems_and_defs/ch{{ ch_num }}.txt appear exactly once in ch{{ ch_num }}.lean (100% coverage, no duplicates)
+3. **Semantic Equivalence:** ALL theorems and definitions have **Equivalent** or **Minor discrepancy** ratings - NO **Major discrepancy** found
+4. **No Missing Statements:** Every theorem/corollary/lemma/definition from the source has a corresponding Lean formalization
 
 Reply with ONLY the single word **'CONTINUE'** otherwise.
 

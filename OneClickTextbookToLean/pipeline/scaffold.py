@@ -25,7 +25,7 @@ def main():
     # --- Create directory tree ---
     dirs = [
         os.path.join(project, "Formalization"),
-        os.path.join(project, "natural_language", "raw_data", "theorems_only"),
+        os.path.join(project, "natural_language", "raw_data", "theorems_and_defs"),
     ]
     for ch in chapters:
         dirs.append(os.path.join(project, "Formalization", "intermediate_files", f"ch{ch}"))

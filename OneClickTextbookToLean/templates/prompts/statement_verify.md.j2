@@ -2,14 +2,14 @@
 
 ## Objective
 
-Verify that each formalized Lean statement in `{{ lean_chapter_file }}` is semantically equivalent to the original LaTeX theorem quote.
+Verify that each formalized Lean statement in `{{ lean_chapter_file }}` is semantically equivalent to the original LaTeX theorem/definition quote.
 
 ## Step 0: Coverage Check
 
-First, run the coverage check to ensure all LaTeX theorem blocks appear in the Lean file:
+First, run the coverage check to ensure all LaTeX theorem and definition blocks appear in the Lean file:
 
 ```bash
-python {{ evaluation_dir }}/check_coverage_latex_quote.py {{ theorems_only_dir }}/ch{{ ch_num }}.txt {{ lean_chapter_file }}
+python {{ evaluation_dir }}/check_coverage_latex_quote.py {{ theorems_and_defs_dir }}/ch{{ ch_num }}.txt {{ lean_chapter_file }}
 ```
 
 If the coverage check fails (missing or duplicate blocks), report the failure and stop. The formalization step must fix coverage issues before verification can proceed.
@@ -28,13 +28,13 @@ If the build fails with errors in ch{{ ch_num }}.lean, report the failure and st
 
 Read `{{ lean_chapter_file }}`.
 
-For **each** theorem/corollary/lemma (identified by the naming pattern `Ch{{ ch_num }}_theorem_*`, `Ch{{ ch_num }}_corollary_*`, `Ch{{ ch_num }}_lemma_*`), verify semantic equivalence among the three representations:
+For **each** theorem/corollary/lemma/definition (identified by the naming pattern `Ch{{ ch_num }}_theorem_*`, `Ch{{ ch_num }}_corollary_*`, `Ch{{ ch_num }}_lemma_*`, `Ch{{ ch_num }}_def_*`), verify semantic equivalence among the three representations:
 
-1. **Exact LaTeX quote** (in the comment block starting with `--Exact quote of the latex code of the theorem statement`)
+1. **Exact LaTeX quote** (in the comment block starting with `--Exact quote of the latex code`)
 2. **Natural language statement** (in the comment block starting with `--Natural language statement`)
-3. **Lean formalization** (the actual `theorem` or `corollary` or `lemma` statement)
+3. **Lean formalization** (the actual `theorem`, `corollary`, `lemma`, or `def` statement)
 
-### For each theorem, assess:
+### For each theorem/definition, assess:
 
 **A. LaTeX -> Natural Language Faithfulness:**
 - Does the natural language statement accurately capture the meaning of the LaTeX?
@@ -54,23 +54,20 @@ For **each** theorem/corollary/lemma (identified by the naming pattern `Ch{{ ch_
 
 ## Step 3: Write Results
 
-Write the full verification results to:
-```
-{{ verification_fl_statement_dir }}/fl_statements_verification_result.md
-```
+Write the full verification results to the round-specific output file. **The exact file path will be provided to you at runtime by the orchestrator** (it will be inside a round-specific directory like `{{ verification_fl_statement_dir }}/round_N/fl_statements_verification_result.md`). Write your results to whichever path the orchestrator tells you.
 
 The results file must contain:
 
 1. **Coverage check result** (pass/fail with output)
 2. **Build check result** (pass/fail)
-3. **Per-theorem semantic equivalence assessment** with ratings
-4. **Summary**: total theorems checked, number equivalent, number with minor discrepancies, number with major discrepancies
-5. **List of theorems with even minor discrepancies** that need to be re-formalized
+3. **Per-statement semantic equivalence assessment** (for each theorem/definition) with ratings
+4. **Summary**: total statements checked, number equivalent, number with minor discrepancies, number with major discrepancies
+5. **List of statements with even minor discrepancies** that need to be re-formalized
 
 ## Important
 
 - Be rigorous and mathematically precise in your assessment
 - A "minor discrepancy" is a stylistic difference that doesn't change mathematical meaning
-- A "major discrepancy" is a difference that changes the mathematical content of the theorem
+- A "major discrepancy" is a difference that changes the mathematical content of the theorem or definition
 - Do NOT modify ch{{ ch_num }}.lean yourself - only report issues
 - Even minor discrepancy fail the verification!! Strict semantic equivalence is required!

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Check coverage of theorem blocks from extracted theorems file against a target file.
+Check coverage of theorem/definition blocks from extracted file against a target file.
 
 Usage:
-    python check_coverage.py <theorems_file> <target_file>
+    python check_coverage_latex_quote.py <theorems_and_defs_file> <target_file>
 
 Example:
-    python check_coverage.py theorems_only/ch3.txt lean_to_nl/ch3_first_order_semantics.md
+    python check_coverage_latex_quote.py theorems_and_defs/ch3.txt ch3.lean
 """
 
 import sys
@@ -17,10 +17,10 @@ from typing import List, Tuple
 def extract_theorem_blocks(content: str) -> List[str]:
     r"""
     Extract all \begin{...}...\end{...} blocks from the content.
-    Matches theorem, lemma, corollary environments.
+    Matches theorem, lemma, corollary, and definition environments.
     """
     pattern = re.compile(
-        r'\\begin\{(theorem|lemma|corollary)\}.*?\\end\{\1\}',
+        r'\\begin\{(theorem|lemma|corollary|definition)\}.*?\\end\{\1\}',
         re.DOTALL
     )
     return [match.group() for match in pattern.finditer(content)]
@@ -76,7 +76,7 @@ def get_block_label(block: str) -> str:
 def main():
     if len(sys.argv) != 3:
         print("Usage: python check_coverage.py <theorems_file> <target_file>")
-        print("Example: python check_coverage.py theorems_only/ch3.txt lean_to_nl/ch3.md")
+        print("Example: python check_coverage_latex_quote.py theorems_and_defs/ch3.txt ch3.lean")
         sys.exit(1)
 
     theorems_file = sys.argv[1]

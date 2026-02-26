@@ -2,7 +2,7 @@
 
 ## Overview
 
-You are a Lean 4 expert and mathematical logic reviewer tasked with verifying the formalization of Chapter {{ ch_num }} theorems. Your job is to verify correctness at multiple levels: build success, proof completeness, statement preservation.
+You are a Lean 4 expert and mathematical logic reviewer tasked with verifying the formalization of Chapter {{ ch_num }} theorems and definitions. Your job is to verify correctness at multiple levels: build success, proof completeness, statement and definition preservation.
 
 ## File to Verify
 
@@ -66,9 +66,9 @@ python3 {{ evaluation_dir }}/check_coverage_lean_statement.py \
   {{ lean_chapter_file }}
 ```
 
-**Purpose:** This verifies that all original definitions and theorem statements remain unmodified.
+**Purpose:** This verifies that all original textbook definitions and theorem statements remain unmodified.
 
-**Criteria:** The script must report that all statements are preserved (no modifications to definitions or theorem signatures).
+**Criteria:** The script must report that all statements are preserved (no modifications to textbook definitions or theorem signatures).
 
 **Record:** Full script output.
 
@@ -76,10 +76,7 @@ python3 {{ evaluation_dir }}/check_coverage_lean_statement.py \
 
 ## Output Requirements
 
-Write ALL verification results to (overwrite this file):
-```
-{{ verification_dir }}/fl_proof_verification_result.md
-```
+Write ALL verification results to the round-specific output file. **The exact file path will be provided to you at runtime by the orchestrator** (it will be inside a round-specific directory like `{{ verification_dir }}/round_N/fl_proof_verification_result.md`). Write your results to whichever path the orchestrator tells you.
 
 ### Output Format
 

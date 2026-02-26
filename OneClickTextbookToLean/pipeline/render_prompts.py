@@ -48,7 +48,7 @@ def main():
             "lean_chapter_file": os.path.join(project, "Formalization", f"ch{ch}.lean"),
             "lean_src_dir": os.path.join(project, "Formalization"),
             "raw_data_dir": os.path.join(project, "natural_language", "raw_data"),
-            "theorems_only_dir": os.path.join(project, "natural_language", "raw_data", "theorems_only"),
+            "theorems_and_defs_dir": os.path.join(project, "natural_language", "raw_data", "theorems_and_defs"),
             "evaluation_dir": evaluation_dir,
             "experiment_ch_dir": os.path.join(project, "experiments", "auto", f"ch{ch}"),
             "verification_dir": os.path.join(project, "experiments", "auto", f"ch{ch}", "verification"),

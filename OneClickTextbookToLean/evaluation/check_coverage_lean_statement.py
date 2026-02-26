@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Check coverage of Lean theorem/lemma statements from input file against output file.
+Check coverage of Lean theorem/def statements from input file against output file.
 
 Extracts:
-- All `def` statements
+- All `def` statements (both textbook definitions with LaTeX quotes and helper definitions)
 - Only `theorem` statements that have a LaTeX quote comment block above them
   (comment starting with "/-Exact quote of the latex code")
 

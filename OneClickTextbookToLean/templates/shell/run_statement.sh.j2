@@ -11,7 +11,7 @@ STATEMENT_FL_TASK="$AGENT_DIR/CLAUDE_statement_fl.md"
 STATEMENT_VERIFY_TASK="$AGENT_DIR/CLAUDE_statement_verify.md"
 VERDICT_TASK="$AGENT_DIR/CLAUDE_verdict_statement.md"
 
-STATEMENTS_STATUS="$VERIFY_DIR/fl_statements_verification_result.md"
+# Per-round paths are set inside the loop (ROUND_DIR, STATEMENTS_STATUS, STATEMENTS_FL_STATUS)
 
 STATUS_FILE="$LOG_DIR/AUTO_RUN_STATUS.md"
 LOG_FILE="$LOG_DIR/AUTO_RUN_LOG.txt"
@@ -140,18 +140,36 @@ log "============================================"
 for i in $(seq 1 $MAX_ITERATIONS); do
     CURRENT_ITER=$i
 
+    # --- Create round directory ---
+    ROUND_DIR="$VERIFY_DIR/round_$i"
+    mkdir -p "$ROUND_DIR"
+    STATEMENTS_STATUS="$ROUND_DIR/fl_statements_verification_result.md"
+    STATEMENTS_FL_STATUS="$ROUND_DIR/fl_statements_status.md"
+
+    # Find the previous round's files (for statement FL to read)
+    PREV_ROUND=$((i - 1))
+    PREV_ROUND_DIR="$VERIFY_DIR/round_$PREV_ROUND"
+    PREV_STATEMENTS_STATUS="$PREV_ROUND_DIR/fl_statements_verification_result.md"
+
     log ""
     log "========================================"
     log "=== ITERATION $i of $MAX_ITERATIONS ==="
     log "========================================"
-    append_history "Iteration $i started"
+    log "Round directory: $ROUND_DIR"
+    append_history "Iteration $i started (round dir: round_$i)"
 
     # Step 1: Statement Formalization
     update_status "$i" "1/3 Statement Formalization" "RUNNING" "Running Claude statement formalization task..."
     append_history "Iteration $i: Statement formalization started"
     log "Iteration $i: Statement Formalization started"
 
-    run_claude "Load task from $STATEMENT_FL_TASK. Also read the verification status from $STATEMENTS_STATUS if it exists, and focus on fixing any major discrepancies or coverage issues reported there. IMPORTANT: Do NOT modify any file outside of this chapter. Ignore any errors or warnings that are not about this chapter."
+    STATEMENT_FL_PROMPT="Load task from $STATEMENT_FL_TASK."
+    if [ -f "$PREV_STATEMENTS_STATUS" ]; then
+        STATEMENT_FL_PROMPT="$STATEMENT_FL_PROMPT Also read the PREVIOUS round's verification result from $PREV_STATEMENTS_STATUS, and focus on fixing any major discrepancies or coverage issues reported there."
+    fi
+    STATEMENT_FL_PROMPT="$STATEMENT_FL_PROMPT This is round $i. Save your verification efforts and status log to $STATEMENTS_FL_STATUS. IMPORTANT: Do NOT modify any file outside of this chapter. Ignore any errors or warnings that are not about this chapter."
+
+    run_claude "$STATEMENT_FL_PROMPT"
 
     log "Iteration $i: Statement Formalization ends"
     append_history "Iteration $i: Statement formalization completed"
@@ -161,7 +179,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     append_history "Iteration $i: Statement verification started"
     log "Iteration $i: Statement Verification started"
 
-    run_claude "Load task from $STATEMENT_VERIFY_TASK and execute the verification. Write results to $STATEMENTS_STATUS. IMPORTANT: Do NOT modify any file outside of this chapter. Ignore any errors or warnings that are not about this chapter."
+    run_claude "Load task from $STATEMENT_VERIFY_TASK and execute the verification. This is round $i. Write results to $STATEMENTS_STATUS. IMPORTANT: Do NOT modify any file outside of this chapter. Ignore any errors or warnings that are not about this chapter."
 
     log "Iteration $i: Statement Verification ends"
     append_history "Iteration $i: Statement verification completed"
@@ -171,7 +189,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     append_history "Iteration $i: Checking verdict"
     log "Iteration $i: Checking verdict"
 
-    VERDICT_OUTPUT=$(run_claude_capture "Load task from $VERDICT_TASK and execute it. Reply with exactly one word: DONE or CONTINUE.")
+    VERDICT_OUTPUT=$(run_claude_capture "Load task from $VERDICT_TASK. The verification result for this round is at $STATEMENTS_STATUS. Read that file and execute the verdict. Reply with exactly one word: DONE or CONTINUE.")
     DECISION=$(echo "$VERDICT_OUTPUT" | tail -1)
 
     log "Iteration $i: Decision is $DECISION"

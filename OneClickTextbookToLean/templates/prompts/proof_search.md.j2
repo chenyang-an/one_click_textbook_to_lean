@@ -11,12 +11,29 @@ The file containing definitions and theorem statements is located at:
 {{ lean_chapter_file }}
 ```
 
-This file contains theorems/corollaries/lemmas that need proofs. Each theorem currently has `sorry` as its proof.
+This file contains theorems/corollaries/lemmas that need proofs, as well as textbook definitions (with LaTeX quote comments). Each theorem currently has `sorry` as its proof.
+
+## CRITICAL: Round-Based Workflow — Read Previous Round, Log for Next Round
+
+This proof search runs in multiple rounds. The orchestrator will tell you which round this is and provide file paths.
+
+### At the START of your round:
+- The orchestrator will give you the **previous round's proof status** (`fl_proof_status.md`) and **verification result** (`fl_proof_verification_result.md`) if they exist.
+- **You MUST read these files first before attempting any proofs.** They contain:
+  - Which theorems were already proven successfully (don't redo them unless broken)
+  - Which approaches were tried and **failed** for each unproven theorem — **do NOT repeat these failed approaches**
+  - Verification failures (build errors, coverage issues) you need to be aware of
+- Use this information to pick up where the previous round left off and try **different** strategies.
+
+### At the END of your round:
+- **You MUST save a complete proof status log** to the round-specific `fl_proof_status.md` path the orchestrator gives you.
+- For every theorem you attempted, log **every approach you tried and why it failed or succeeded**.
+- This file is the **primary way the next round learns what happened**. If you don't log your failed approaches, the next round will waste time repeating the same mistakes.
 
 ## Absolute Requirements
 
 ### DO NOT:
-1. **Modify existing definitions** - All definitions in the file must remain exactly as they are
+1. **Modify existing textbook definitions** - All definitions that have a LaTeX quote comment block (starting with "Exact quote of the latex code") must remain exactly as they are. These are textbook definitions and are immutable, just like theorem statements.
 2. **Modify theorem statements** - The theorem signatures must remain unchanged, even if you think the statement is unfaithful to the latex quote.
 3. **Use `sorry`** - No `sorry` may appear anywhere in the final proofs
 4. **Declare axioms** - You cannot declare something as an `axiom` to avoid proving it
@@ -25,7 +42,7 @@ This file contains theorems/corollaries/lemmas that need proofs. Each theorem cu
 
 ### You MAY:
 1. Add helper lemmas to assist with proofs
-2. Add auxiliary definitions if needed for proofs
+2. Add new auxiliary definitions if needed for proofs (these are helper definitions you create, NOT the textbook definitions with LaTeX quotes)
 3. Use Mathlib4 tactics and lemmas (the file already imports `Mathlib.Tactic`). The entire Mathlib4 is open to you.
 
 ## Workflow
@@ -58,7 +75,7 @@ python3 {{ evaluation_dir }}/check_coverage_lean_statement.py \
   {{ lean_chapter_file }}
 ```
 
-This script verifies that you have not modified any original theorem statements or definitions. If anything is modified, **immediately revert** the changes and redo the proof.
+This script verifies that you have not modified any original theorem statements or textbook definitions. If anything is modified, **immediately revert** the changes and redo the proof.
 
 ### Step 4: Move to Next Theorem
 Proceed to the next theorem after the current one:
@@ -74,12 +91,10 @@ Log
 1. all verification efforts
 2. Extremely important: the methods you've tried for the theorems but failed so far!!!!!
 3. the coverage score resulted from check_coverage_lean_statement.py
-to:
-```
-{{ verification_dir }}/fl_proof_status.md
-```
 
-Don't overwrite anything. Only add to this file.
+**The log file path will be provided to you at runtime by the orchestrator** (it will be inside a round-specific directory like `{{ verification_dir }}/round_N/fl_proof_status.md`). Write your log to whichever path the orchestrator tells you.
+
+Do not overwrite previous rounds' logs. Each round has its own directory.
 
 Include for each theorem:
 - Theorem name
@@ -89,16 +104,89 @@ Include for each theorem:
 - Any helper lemmas added
 - Notes on proof strategy (Especially log the failed approach you've tried so far if you in the end fail to finish the proof for this theorem)
 
+### Logging Example 1: Completed proof
+
+Below is an example of what a log entry should look like when a proof succeeds.
+
+```
+## theorem_continuous_add (COMPLETED)
+
+**Attempt 1:** Used `continuity` tactic directly → `lake build` failed with "tactic 'continuity' failed".
+**Attempt 2:** Tried `apply Continuous.add` with `exact continuous_fst` and `exact continuous_snd` → `lake build` succeeded.
+
+- lake build: ✅ success (no errors/warnings for ch3)
+- Coverage check: ✅ 18/18 statements preserved (score: 100%)
+- Helper lemmas added: none
+- Final proof strategy: `apply Continuous.add <;> assumption`
+```
+
+### Logging Example 2: Failed/in-progress proof (CRITICAL — you MUST log every failed attempt like this)
+
+Below is an example of what a log entry should look like when you have NOT yet succeeded. **Every failed approach must be recorded so the next iteration can avoid repeating the same mistakes.**
+
+```
+## theorem_compact_subset (IN PROGRESS — NOT YET PROVEN)
+
+**Attempt 1:** Tried `apply IsCompact.subset` with the hypothesis directly → failed: "type mismatch, expected IsCompact s, got IsCompact t".
+**Attempt 2:** Tried unfolding the definition and using `Filter.Eventually` reasoning → failed: "unknown identifier 'Filter.Eventually.mono'".
+**Attempt 3:** Searched Mathlib for `IsCompact.of_isClosed_subset` and applied it → failed: argument order wrong, got "function expected at 'hK', term has type IsCompact K".
+**Attempt 4:** Reversed argument order: `exact hK.of_isClosed_subset hC hSK` → `lake build` failed with "unknown identifier 'IsCompact.of_isClosed_subset'". Checked Mathlib: the correct name is `IsCompact.closure_of_subset`? Still exploring.
+
+- lake build: ❌ still failing
+- Coverage check: ✅ 18/18 statements preserved (score: 100%)
+- Helper lemmas added: tried `helper_compact_inter` but it didn't help, removed it
+- Proof strategy notes: The key issue is finding the right Mathlib lemma name. `IsCompact.of_isClosed_subset` doesn't exist in current Mathlib. Need to search for the correct API.
+```
+
 ## Success Criteria
 
 You are **not done** until ALL of the following are satisfied:
 
 1. All theorems have complete proofs (no `sorry` anywhere)
 2. `lake build` succeeds with no warnings
-3. The coverage check script passes (no definitions/statements modified)
+3. The coverage check script passes (no textbook definitions/theorem statements modified)
 
-## When writing proof, make sure the stuff you write don't insert in between theorem and the natural language description and the exact quote.
+## CRITICAL: Do NOT break apart the comment-block / statement unit
 
-## During proving, if you found that theorem statement is not faithful and semantically equivalent to the latex code quote, overwrite and save your analysis and explanation for this theorem into {{ verification_dir }}/fl_statements_unfaithful_arguments.md (together with the latex quote and the old theorem statement), then work on other theorem. Important: don't change the statement in {{ lean_chapter_file }}, even if you think the statement is unfaithful to the latex code quote! Someone else will work on it.
+Each textbook theorem or definition is a single contiguous unit consisting of:
+1. The `/-...-/` comment block (LaTeX quote → natural language → "Lean formalization of the natural language statement")
+2. The Lean `theorem` / `def` / `lemma` / `corollary` statement immediately after the closing `-/`
 
-## Log the failed approach in {{ verification_dir }}/fl_proof_status.md! This might help for the next iteration! (never overwrite this file!)
+**These two pieces must ALWAYS stay directly adjacent — nothing may be inserted between them.**
+
+If you need to add helper lemmas, auxiliary definitions, or any other code, place them **before** the comment block or **after** the theorem statement + its proof — **never** between the comment block and the statement it describes. Violating this will cause the coverage checker to fail.
+
+## During proving, if you found that a theorem statement or textbook definition is not faithful and semantically equivalent to the latex code quote, **append** your analysis and explanation to the round-specific `fl_statements_unfaithful_arguments.md` (the path the orchestrator tells you). Include the latex quote and the current Lean statement. Then move on to other theorems. Important: don't change the statement or definition in {{ lean_chapter_file }}, even if you think it is unfaithful to the latex code quote! Someone else will review and apply the change.
+
+## Log the failed approach in the round-specific fl_proof_status.md (path provided by orchestrator)! This helps the next round!
+
+## If You Exit With `sorry` Still Present
+
+If you are unable to prove a theorem and it still has `sorry` when you exit, you MUST add a comment **directly above the `sorry` in the .lean file** summarizing every approach you tried and why it failed. This way the next iteration can see the history right where the work needs to happen.
+
+Format the comment like this:
+```lean
+/- PROOF ATTEMPTS LOG (do not delete — helps next iteration):
+  Attempt 1: Used `continuity` tactic → failed: "tactic 'continuity' failed"
+  Attempt 2: Tried `apply Continuous.add` → failed: argument mismatch
+  Attempt 3: Searched Mathlib for `IsCompact.of_isClosed_subset` → name doesn't exist in current Mathlib
+  Key blocker: Cannot find the correct Mathlib lemma for closed-subset compactness.
+-/
+sorry
+```
+
+This is **in addition to** logging in the round-specific `fl_proof_status.md` (path provided by orchestrator) — both places must be updated.
+
+## Before You Exit — Mandatory Logging Check
+
+**Before you finish your session, you MUST perform the following check. Do NOT skip this.**
+
+1. Read the round-specific `fl_proof_status.md` (the path the orchestrator told you to write to).
+2. For **every** theorem you attempted (whether you succeeded or not), confirm there is a log entry. Specifically check:
+   - Does the log contain an entry for each theorem you worked on?
+   - For theorems you **failed** to prove: does the entry list **every** approach you tried and why it failed?
+   - For theorems you **proved**: does the entry record the final strategy and build/coverage results?
+3. If **any** entry is missing or incomplete, add it **now** before you exit.
+4. For every remaining `sorry` in `{{ lean_chapter_file }}`, confirm there is a comment block directly above it listing all failed approaches. If not, add it now.
+
+This is non-negotiable. The log is the only artifact that carries over between rounds. If you don't log your failed attempts, the next round will waste time repeating the same mistakes.

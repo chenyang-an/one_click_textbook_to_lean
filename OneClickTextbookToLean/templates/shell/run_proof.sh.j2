@@ -11,8 +11,7 @@ VERIFY_TASK="$AGENT_DIR/CLAUDE_proof_verify.md"
 VERDICT_TASK="$AGENT_DIR/CLAUDE_verdict.md"
 CHECK_STATEMENT_TASK="$AGENT_DIR/CLAUDE_check_statement_change.md"
 
-PROOF_STATUS="$VERIFY_DIR/fl_proof_status.md"
-VERIFY_RESULT="$VERIFY_DIR/fl_proof_verification_result.md"
+# Per-round paths are set inside the loop (ROUND_DIR, PROOF_STATUS, VERIFY_RESULT)
 
 STATUS_FILE="$VERIFY_DIR/AUTO_RUN_STATUS.md"
 LOG_FILE="$VERIFY_DIR/AUTO_RUN_LOG.txt"
@@ -137,18 +136,41 @@ log "============================================"
 for i in $(seq 1 $MAX_ITERATIONS); do
     CURRENT_ITER=$i
 
+    # --- Create round directory ---
+    ROUND_DIR="$VERIFY_DIR/round_$i"
+    mkdir -p "$ROUND_DIR"
+    PROOF_STATUS="$ROUND_DIR/fl_proof_status.md"
+    VERIFY_RESULT="$ROUND_DIR/fl_proof_verification_result.md"
+    UNFAITHFUL_ARGS="$ROUND_DIR/fl_statements_unfaithful_arguments.md"
+
+    # Find the previous round's files (for proof search to read)
+    PREV_ROUND=$((i - 1))
+    PREV_ROUND_DIR="$VERIFY_DIR/round_$PREV_ROUND"
+    PREV_VERIFY_RESULT="$PREV_ROUND_DIR/fl_proof_verification_result.md"
+    PREV_PROOF_STATUS="$PREV_ROUND_DIR/fl_proof_status.md"
+
     log ""
     log "========================================"
     log "=== ITERATION $i of $MAX_ITERATIONS ==="
     log "========================================"
-    append_history "Iteration $i started"
+    log "Round directory: $ROUND_DIR"
+    append_history "Iteration $i started (round dir: round_$i)"
 
     # Step 1: Proof Search
     update_status "$i" "1/3 Proof Search" "RUNNING" "Running Claude proof search task..."
     append_history "Iteration $i: Proof search started"
     log "Iteration $i: Proof Search started"
 
-    run_claude "Load task from $PROOF_SEARCH_TASK. Also read the verification result from $VERIFY_RESULT and proof status from $PROOF_STATUS if they exist. Start proving theorems. If one approach doesn't work after much effort, try a completely different proof strategy. No sorry allowed in proofs! IMPORTANT: Do NOT modify any file outside of this chapter. Ignore any errors or warnings that are not about this chapter."
+    PROOF_SEARCH_PROMPT="Load task from $PROOF_SEARCH_TASK."
+    if [ -f "$PREV_VERIFY_RESULT" ]; then
+        PROOF_SEARCH_PROMPT="$PROOF_SEARCH_PROMPT Also read the PREVIOUS round's verification result from $PREV_VERIFY_RESULT."
+    fi
+    if [ -f "$PREV_PROOF_STATUS" ]; then
+        PROOF_SEARCH_PROMPT="$PROOF_SEARCH_PROMPT Also read the PREVIOUS round's proof status from $PREV_PROOF_STATUS."
+    fi
+    PROOF_SEARCH_PROMPT="$PROOF_SEARCH_PROMPT This is round $i. Save your proof status log to $PROOF_STATUS. If you find any theorem statement unfaithful to its LaTeX quote, save your analysis to $UNFAITHFUL_ARGS. Start proving theorems. If one approach doesn't work after much effort, try a completely different proof strategy. No sorry allowed in proofs! IMPORTANT: Do NOT modify any file outside of this chapter. Ignore any errors or warnings that are not about this chapter."
+
+    run_claude "$PROOF_SEARCH_PROMPT"
 
     log "Iteration $i: Proof Search ends"
     append_history "Iteration $i: Proof search completed"
@@ -158,7 +180,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     append_history "Iteration $i: Verification started"
     log "Iteration $i: Verification started"
 
-    run_claude "Load task from $VERIFY_TASK and execute the verification. Write results to $VERIFY_RESULT. IMPORTANT: Do NOT modify any file outside of this chapter. Ignore any errors or warnings that are not about this chapter."
+    run_claude "Load task from $VERIFY_TASK and execute the verification. This is round $i. Write results to $VERIFY_RESULT. IMPORTANT: Do NOT modify any file outside of this chapter. Ignore any errors or warnings that are not about this chapter."
 
     log "Iteration $i: Verification ends"
     append_history "Iteration $i: Verification completed"
@@ -168,7 +190,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     append_history "Iteration $i: Checking verdict"
     log "Iteration $i: Checking verdict"
 
-    VERDICT_OUTPUT=$(run_claude_capture "Load task from $VERDICT_TASK and execute it. Reply with exactly one word: DONE or CONTINUE.")
+    VERDICT_OUTPUT=$(run_claude_capture "Load task from $VERDICT_TASK. The verification result for this round is at $VERIFY_RESULT. Read that file and execute the verdict. Reply with exactly one word: DONE or CONTINUE.")
     DECISION=$(echo "$VERDICT_OUTPUT" | tail -1)
 
     log "Iteration $i: Decision is $DECISION"
@@ -188,7 +210,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
         append_history "Iteration $i: Check statement change started"
         log "Iteration $i: Check Statement Change started"
 
-        run_claude "Load task from $CHECK_STATEMENT_TASK and execute it."
+        run_claude "Load task from $CHECK_STATEMENT_TASK. The unfaithful arguments file for this round is at $UNFAITHFUL_ARGS. Read that file and execute the task. Log your decisions to $ROUND_DIR/fl_statements_change_history.md."
 
         log "Iteration $i: Check Statement Change ends"
         append_history "Iteration $i: Check statement change completed"
